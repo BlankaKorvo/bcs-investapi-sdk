@@ -62,32 +62,13 @@ public sealed record BcsTokenSet
     internal static BcsTokenSet FromAuthResponse(BcsAuthResponse response, DateTimeOffset receivedAtUtc)
     {
         ArgumentNullException.ThrowIfNull(response);
-
-        if (string.IsNullOrWhiteSpace(response.AccessToken))
-        {
-            throw new InvalidOperationException("BCS auth response does not contain access_token.");
-        }
-
-        if (string.IsNullOrWhiteSpace(response.RefreshToken))
-        {
-            throw new InvalidOperationException("BCS auth response does not contain refresh_token.");
-        }
-
-        if (response.ExpiresIn <= 0)
-        {
-            throw new InvalidOperationException($"BCS auth response expires_in must be greater than zero. Actual value: {response.ExpiresIn}.");
-        }
-
-        if (response.RefreshExpiresIn <= 0)
-        {
-            throw new InvalidOperationException($"BCS auth response refresh_expires_in must be greater than zero. Actual value: {response.RefreshExpiresIn}.");
-        }
+        response.Validate();
 
         return new BcsTokenSet
         {
             AccessToken = response.AccessToken,
             RefreshToken = response.RefreshToken,
-            TokenType = string.IsNullOrWhiteSpace(response.TokenType) ? "bearer" : response.TokenType,
+            TokenType = response.TokenType,
             ExpiresIn = response.ExpiresIn,
             RefreshExpiresIn = response.RefreshExpiresIn,
             AccessTokenExpiresAtUtc = receivedAtUtc.AddSeconds(response.ExpiresIn),

@@ -265,6 +265,22 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenCustomStoreAlsoImplementsCoordinator_DoesNotUseCoordinatorImplicitly()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "refresh-2"))));
+        var store = new NonReentrantCoordinatedTokenStore();
+        var manager = CreateManager(handler, store, clock, refreshToken: "refresh-1");
+
+        var tokenSet = await manager.RefreshAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-1", tokenSet.AccessToken);
+        Assert.Equal("refresh-2", stored?.RefreshToken);
+        Assert.Equal(0, store.ExecuteCallCount);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenResolvedFromDiAndCalledTwice_CreatesHttpClientPerRefreshRequest()
     {
         var refreshResponseCount = 0;
@@ -640,6 +656,60 @@ public sealed class BcsTokenManagerTests
             {
                 SaveCancellationObserved = true;
                 throw;
+            }
+        }
+    }
+
+    private sealed class NonReentrantCoordinatedTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordinator
+    {
+        private readonly SemaphoreSlim _gate = new(1, 1);
+        private BcsTokenSet? _tokenSet;
+
+        public int ExecuteCallCount { get; private set; }
+
+        public async ValueTask<T> ExecuteAsync<T>(
+            Func<CancellationToken, ValueTask<T>> operation,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+
+            ExecuteCallCount++;
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await operation(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public async ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return _tokenSet;
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        public async ValueTask SaveAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(tokenSet);
+
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                _tokenSet = tokenSet;
+            }
+            finally
+            {
+                _gate.Release();
             }
         }
     }

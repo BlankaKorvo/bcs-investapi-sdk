@@ -11,6 +11,8 @@ public sealed class BcsInMemoryTokenStore : IBcsTokenStore, IBcsTokenRefreshCoor
         CancellationToken cancellationToken = default) =>
         ExecuteWithGateAsync(operation, cancellationToken);
 
+    internal IBcsTokenRefreshCoordinator RefreshCoordinator => this;
+
     public ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default) =>
         ExecuteWithGateAsync(
             _ => ValueTask.FromResult(_tokenSet),
@@ -27,6 +29,22 @@ public sealed class BcsInMemoryTokenStore : IBcsTokenStore, IBcsTokenRefreshCoor
                 return ValueTask.FromResult(true);
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    internal ValueTask<BcsTokenSet?> LoadForRefreshAsync(CancellationToken cancellationToken) =>
+        ValueTask.FromResult(_tokenSet);
+
+    internal ValueTask EnsureCanPersistForRefreshAsync(CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
+
+    internal ValueTask SaveForRefreshAsync(
+        BcsTokenSet tokenSet,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(tokenSet);
+
+        _tokenSet = tokenSet;
+        return ValueTask.CompletedTask;
     }
 
     private async ValueTask<T> ExecuteWithGateAsync<T>(

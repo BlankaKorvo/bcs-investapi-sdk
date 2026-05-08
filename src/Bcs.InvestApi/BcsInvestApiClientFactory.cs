@@ -39,15 +39,17 @@ public static class BcsInvestApiClientFactory
             ? new HttpClient()
             : new HttpClient(httpMessageHandler, disposeHandler: false);
 
-        if (settings.Timeout is not null)
-        {
-            httpClient.Timeout = settings.Timeout.Value;
-        }
+        BcsInvestApiClientComposition.ConfigureAuthHttpClient(settings, httpClient);
 
-        tokenStore ??= CreateTokenStore(settings);
+        tokenStore ??= BcsInvestApiClientComposition.CreateTokenStore(settings);
 
-        var auth = new BcsAuthService(httpClient, settings);
-        var tokens = new BcsTokenManager(auth, tokenStore, settings, clock, tokenRefreshCoordinator);
+        var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient);
+        var tokens = BcsInvestApiClientComposition.CreateTokenManager(
+            auth,
+            tokenStore,
+            settings,
+            clock,
+            tokenRefreshCoordinator);
 
         return new BcsInvestApiClient(
             auth,
@@ -55,9 +57,4 @@ public static class BcsInvestApiClientFactory
             ownsTokenManager: true,
             ownedTransport: httpClient);
     }
-
-    private static IBcsTokenStore CreateTokenStore(BcsInvestApiSettings settings) =>
-        string.IsNullOrWhiteSpace(settings.TokenStoragePath)
-            ? new BcsInMemoryTokenStore()
-            : new BcsFileTokenStore(settings.TokenStoragePath);
 }

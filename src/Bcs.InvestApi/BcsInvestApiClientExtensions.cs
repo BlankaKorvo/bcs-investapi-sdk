@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 
 public static class BcsInvestApiClientExtensions
 {
-    private const string AuthHttpClientName = "Bcs.InvestApi.Auth";
     public static IServiceCollection AddBcsInvestApiClient(
         this IServiceCollection services,
         Action<BcsInvestApiSettings> configure)
@@ -39,8 +38,6 @@ public static class BcsInvestApiClientExtensions
         return services;
     }
 
-
-
     private static void AddClientServices(IServiceCollection services)
     {
         services.AddSingleton<IBcsClock, BcsSystemClock>();
@@ -48,22 +45,13 @@ public static class BcsInvestApiClientExtensions
         services.AddSingleton<IBcsTokenStore>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            settings.ValidateTokenSettings();
-
-            return string.IsNullOrWhiteSpace(settings.TokenStoragePath)
-                ? new BcsInMemoryTokenStore()
-                : new BcsFileTokenStore(settings.TokenStoragePath);
+            return BcsInvestApiClientComposition.CreateTokenStore(settings);
         });
 
-        services.AddHttpClient(AuthHttpClientName, (sp, httpClient) =>
+        services.AddHttpClient(BcsInvestApiClientComposition.AuthHttpClientName, (sp, httpClient) =>
         {
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            settings.ValidateTransportSettings();
-
-            if (settings.Timeout is not null)
-            {
-                httpClient.Timeout = settings.Timeout.Value;
-            }
+            BcsInvestApiClientComposition.ConfigureAuthHttpClient(settings, httpClient);
         });
 
         services.AddSingleton<BcsAuthService>(sp =>
@@ -71,19 +59,17 @@ public static class BcsInvestApiClientExtensions
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
             var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 
-            return new BcsAuthService(
-                () => httpClientFactory.CreateClient(AuthHttpClientName),
-                settings);
+            return BcsInvestApiClientComposition.CreateAuthService(
+                settings,
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName));
         });
 
         services.AddSingleton<BcsTokenManager>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            settings.ValidateTokenSettings();
-
             var tokenStore = sp.GetRequiredService<IBcsTokenStore>();
 
-            return new BcsTokenManager(
+            return BcsInvestApiClientComposition.CreateTokenManager(
                 sp.GetRequiredService<BcsAuthService>(),
                 tokenStore,
                 settings,

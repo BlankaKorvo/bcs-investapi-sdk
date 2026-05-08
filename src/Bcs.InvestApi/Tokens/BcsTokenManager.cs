@@ -11,9 +11,11 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private readonly BcsAuthService _authService;
     private readonly IBcsTokenStore _tokenStore;
+    private readonly CoordinatedTokenStoreOperations? _coordinatedTokenStoreOperations;
     private readonly BcsInvestApiSettings _settings;
     private readonly IBcsClock _clock;
     private readonly IBcsTokenRefreshCoordinator? _tokenRefreshCoordinator;
+    private readonly bool _useCoordinatedTokenStoreOperations;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly object _autoRefreshGate = new();
     private CancellationTokenSource? _autoRefreshCts;
@@ -59,7 +61,12 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _clock = clock ?? new BcsSystemClock();
-        _tokenRefreshCoordinator = tokenRefreshCoordinator ?? tokenStore as IBcsTokenRefreshCoordinator;
+        _coordinatedTokenStoreOperations = GetBuiltInTokenStoreOperations(tokenStore);
+        var implicitCoordinator = _coordinatedTokenStoreOperations?.RefreshCoordinator;
+        _tokenRefreshCoordinator = tokenRefreshCoordinator ?? implicitCoordinator;
+        _useCoordinatedTokenStoreOperations =
+            _coordinatedTokenStoreOperations is not null &&
+            ReferenceEquals(_tokenRefreshCoordinator, implicitCoordinator);
 
         _settings.ValidateTokenSettings();
         BcsTokenSourcePreflight.EnsureStartupTokenSource(_settings, _tokenStore, _clock);
@@ -235,7 +242,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private async ValueTask<BcsTokenSet> RefreshIfRequiredCoreAsync(bool forceRefresh, CancellationToken cancellationToken)
     {
-        var stored = await _tokenStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadTokenSetForRefreshAsync(cancellationToken).ConfigureAwait(false);
         var nowUtc = _clock.UtcNow;
 
         if (!forceRefresh && stored is not null && !stored.ShouldRefreshAccessToken(nowUtc, _settings.TokenRefreshSkew))
@@ -266,7 +273,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         {
             // After auth succeeds, cancellation must not interrupt persistence of a rotated refresh token.
             using var persistenceCts = new CancellationTokenSource(_settings.TokenPersistenceTimeout);
-            await _tokenStore.SaveAsync(tokenSet, persistenceCts.Token).ConfigureAwait(false);
+            await SaveTokenSetForRefreshAsync(tokenSet, persistenceCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -278,14 +285,15 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private async ValueTask EnsureTokenStoreCanPersistAsync(CancellationToken cancellationToken)
     {
-        if (_tokenStore is not IBcsTokenStorePreflight preflight)
+        var preflight = GetTokenStorePreflight();
+        if (preflight is null)
         {
             return;
         }
 
         try
         {
-            await preflight.EnsureCanPersistAsync(cancellationToken).ConfigureAwait(false);
+            await preflight(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -303,8 +311,69 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         }
     }
 
+    private ValueTask<BcsTokenSet?> LoadTokenSetForRefreshAsync(CancellationToken cancellationToken) =>
+        _useCoordinatedTokenStoreOperations
+            ? _coordinatedTokenStoreOperations!.LoadAsync(cancellationToken)
+            : _tokenStore.LoadAsync(cancellationToken);
+
+    private ValueTask SaveTokenSetForRefreshAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken) =>
+        _useCoordinatedTokenStoreOperations
+            ? _coordinatedTokenStoreOperations!.SaveAsync(tokenSet, cancellationToken)
+            : _tokenStore.SaveAsync(tokenSet, cancellationToken);
+
+    private Func<CancellationToken, ValueTask>? GetTokenStorePreflight()
+    {
+        if (_useCoordinatedTokenStoreOperations)
+        {
+            return _coordinatedTokenStoreOperations!.EnsureCanPersistAsync;
+        }
+
+        return _tokenStore is IBcsTokenStorePreflight preflight
+            ? preflight.EnsureCanPersistAsync
+            : null;
+    }
+
+    private static CoordinatedTokenStoreOperations? GetBuiltInTokenStoreOperations(IBcsTokenStore tokenStore) =>
+        tokenStore switch
+        {
+            BcsInMemoryTokenStore inMemoryStore => new CoordinatedTokenStoreOperations(
+                inMemoryStore.RefreshCoordinator,
+                inMemoryStore.LoadForRefreshAsync,
+                inMemoryStore.EnsureCanPersistForRefreshAsync,
+                inMemoryStore.SaveForRefreshAsync),
+            BcsFileTokenStore fileStore => new CoordinatedTokenStoreOperations(
+                fileStore.RefreshCoordinator,
+                fileStore.LoadForRefreshAsync,
+                fileStore.EnsureCanPersistForRefreshAsync,
+                fileStore.SaveForRefreshAsync),
+            _ => null,
+        };
+
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private sealed class CoordinatedTokenStoreOperations
+    {
+        public CoordinatedTokenStoreOperations(
+            IBcsTokenRefreshCoordinator refreshCoordinator,
+            Func<CancellationToken, ValueTask<BcsTokenSet?>> loadAsync,
+            Func<CancellationToken, ValueTask> ensureCanPersistAsync,
+            Func<BcsTokenSet, CancellationToken, ValueTask> saveAsync)
+        {
+            RefreshCoordinator = refreshCoordinator ?? throw new ArgumentNullException(nameof(refreshCoordinator));
+            LoadAsync = loadAsync ?? throw new ArgumentNullException(nameof(loadAsync));
+            EnsureCanPersistAsync = ensureCanPersistAsync ?? throw new ArgumentNullException(nameof(ensureCanPersistAsync));
+            SaveAsync = saveAsync ?? throw new ArgumentNullException(nameof(saveAsync));
+        }
+
+        public IBcsTokenRefreshCoordinator RefreshCoordinator { get; }
+
+        public Func<CancellationToken, ValueTask<BcsTokenSet?>> LoadAsync { get; }
+
+        public Func<CancellationToken, ValueTask> EnsureCanPersistAsync { get; }
+
+        public Func<BcsTokenSet, CancellationToken, ValueTask> SaveAsync { get; }
     }
 }

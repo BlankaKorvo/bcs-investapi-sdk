@@ -26,6 +26,8 @@ public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordina
         CancellationToken cancellationToken = default) =>
         _coordinator.ExecuteAsync(operation, cancellationToken);
 
+    internal IBcsTokenRefreshCoordinator RefreshCoordinator => this;
+
     public ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default) =>
         _coordinator.ExecuteAsync(LoadCoreAsync, cancellationToken);
 
@@ -51,6 +53,21 @@ public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordina
                 return true;
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    internal ValueTask<BcsTokenSet?> LoadForRefreshAsync(CancellationToken cancellationToken) =>
+        LoadCoreAsync(cancellationToken);
+
+    internal ValueTask EnsureCanPersistForRefreshAsync(CancellationToken cancellationToken) =>
+        EnsureCanPersistCoreAsync(cancellationToken);
+
+    internal ValueTask SaveForRefreshAsync(
+        BcsTokenSet tokenSet,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(tokenSet);
+
+        return SaveCoreAsync(tokenSet, cancellationToken);
     }
 
     private async ValueTask EnsureCanPersistCoreAsync(CancellationToken cancellationToken)
