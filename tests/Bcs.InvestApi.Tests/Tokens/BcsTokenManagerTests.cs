@@ -85,6 +85,34 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task GetAccessTokenAsync_WhenStoredAccessTokenIsEmpty_RefreshesUsingStoredRefreshToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "refresh-3"))));
+        var store = new BcsInMemoryTokenStore();
+        await store.SaveAsync(new BcsTokenSet
+        {
+            AccessToken = "",
+            RefreshToken = "stored-refresh-2",
+            TokenType = "bearer",
+            ExpiresIn = 86400,
+            RefreshExpiresIn = 7776000,
+            ReceivedAtUtc = clock.UtcNow,
+            AccessTokenExpiresAtUtc = clock.UtcNow.AddHours(1),
+            RefreshTokenExpiresAtUtc = clock.UtcNow.AddDays(30),
+        });
+
+        var manager = CreateManager(handler, store, clock, refreshToken: "settings-refresh-1");
+
+        var accessToken = await manager.GetAccessTokenAsync();
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-2", accessToken);
+        Assert.Equal("refresh-3", stored?.RefreshToken);
+        Assert.Contains("refresh_token=stored-refresh-2", handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenTokenStorePreflightFails_DoesNotCallAuthEndpoint()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));

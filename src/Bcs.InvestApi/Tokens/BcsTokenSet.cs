@@ -49,6 +49,21 @@ public sealed record BcsTokenSet
         return nowUtc.Add(refreshSkew) >= AccessTokenExpiresAtUtc;
     }
 
+    internal bool HasUsableAccessToken(DateTimeOffset nowUtc, TimeSpan refreshSkew)
+    {
+        if (string.IsNullOrWhiteSpace(AccessToken))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(TokenType))
+        {
+            return false;
+        }
+
+        return !ShouldRefreshAccessToken(nowUtc, refreshSkew);
+    }
+
     public bool IsRefreshTokenExpired(DateTimeOffset nowUtc, TimeSpan refreshSkew)
     {
         if (refreshSkew < TimeSpan.Zero)
@@ -57,6 +72,21 @@ public sealed record BcsTokenSet
         }
 
         return nowUtc.Add(refreshSkew) >= RefreshTokenExpiresAtUtc;
+    }
+
+    internal void ValidateStoredRefreshToken(DateTimeOffset nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(RefreshToken))
+        {
+            throw new InvalidOperationException(
+                "BCS saved token storage contains an empty refresh token.");
+        }
+
+        if (RefreshTokenExpiresAtUtc <= nowUtc)
+        {
+            throw new InvalidOperationException(
+                $"BCS saved refresh token is expired. RefreshTokenExpiresAtUtc='{RefreshTokenExpiresAtUtc:O}'.");
+        }
     }
 
     internal static BcsTokenSet FromAuthResponse(BcsAuthResponse response, DateTimeOffset receivedAtUtc)

@@ -245,7 +245,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         var stored = await LoadTokenSetForRefreshAsync(cancellationToken).ConfigureAwait(false);
         var nowUtc = _clock.UtcNow;
 
-        if (!forceRefresh && stored is not null && !stored.ShouldRefreshAccessToken(nowUtc, _settings.TokenRefreshSkew))
+        if (!forceRefresh && stored is not null && stored.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew))
         {
             return stored;
         }

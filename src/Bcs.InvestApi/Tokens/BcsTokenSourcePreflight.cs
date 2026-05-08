@@ -38,21 +38,6 @@ internal static class BcsTokenSourcePreflight
             throw new InvalidOperationException(MissingStartupTokenSourceMessage);
         }
 
-        EnsureStoredRefreshTokenIsUsable(storedTokenSet, clock.UtcNow);
-    }
-
-    private static void EnsureStoredRefreshTokenIsUsable(BcsTokenSet tokenSet, DateTimeOffset nowUtc)
-    {
-        if (string.IsNullOrWhiteSpace(tokenSet.RefreshToken))
-        {
-            throw new InvalidOperationException(
-                "BCS saved token storage contains an empty refresh token.");
-        }
-
-        if (tokenSet.RefreshTokenExpiresAtUtc <= nowUtc)
-        {
-            throw new InvalidOperationException(
-                $"BCS saved refresh token is expired. RefreshTokenExpiresAtUtc='{tokenSet.RefreshTokenExpiresAtUtc:O}'.");
-        }
+        storedTokenSet.ValidateStoredRefreshToken(clock.UtcNow);
     }
 }
