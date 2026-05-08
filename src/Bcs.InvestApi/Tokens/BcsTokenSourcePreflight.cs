@@ -28,9 +28,10 @@ internal static class BcsTokenSourcePreflight
                 ex);
         }
 
+        var settingsHasRefreshToken = !string.IsNullOrWhiteSpace(settings.RefreshToken);
         if (storedTokenSet is null)
         {
-            if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
+            if (settingsHasRefreshToken)
             {
                 return;
             }
@@ -38,6 +39,12 @@ internal static class BcsTokenSourcePreflight
             throw new InvalidOperationException(MissingStartupTokenSourceMessage);
         }
 
-        storedTokenSet.ValidateStoredRefreshToken(clock.UtcNow);
+        var nowUtc = clock.UtcNow;
+        if (storedTokenSet.HasUsableRefreshToken(nowUtc) || settingsHasRefreshToken)
+        {
+            return;
+        }
+
+        storedTokenSet.ValidateStoredRefreshToken(nowUtc);
     }
 }

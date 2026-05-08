@@ -44,6 +44,9 @@ POST https://be.broker.ru/trade-api-keycloak/realms/tradeapi/protocol/openid-con
 Content-Type: application/x-www-form-urlencoded
 ```
 
+`BcsInvestApiSettings.AuthUrl` must be an absolute HTTPS URI. Plain HTTP is rejected by default because the SDK sends
+refresh tokens to this endpoint. For local HTTP-only tests, set `AllowInsecureHttpForTesting = true` explicitly.
+
 Form fields:
 
 | Field | Value |

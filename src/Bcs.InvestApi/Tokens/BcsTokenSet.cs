@@ -74,6 +74,10 @@ public sealed record BcsTokenSet
         return nowUtc.Add(refreshSkew) >= RefreshTokenExpiresAtUtc;
     }
 
+    internal bool HasUsableRefreshToken(DateTimeOffset nowUtc) =>
+        !string.IsNullOrWhiteSpace(RefreshToken) &&
+        !IsRefreshTokenExpired(nowUtc, TimeSpan.Zero);
+
     internal void ValidateStoredRefreshToken(DateTimeOffset nowUtc)
     {
         if (string.IsNullOrWhiteSpace(RefreshToken))

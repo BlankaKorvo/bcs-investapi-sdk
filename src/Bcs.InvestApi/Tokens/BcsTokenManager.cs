@@ -244,17 +244,17 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     {
         var stored = await LoadTokenSetForRefreshAsync(cancellationToken).ConfigureAwait(false);
         var nowUtc = _clock.UtcNow;
+        var hasUsableStoredRefreshToken = stored?.HasUsableRefreshToken(nowUtc) == true;
 
-        if (!forceRefresh && stored is not null && stored.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew))
+        if (!forceRefresh &&
+            stored is not null &&
+            hasUsableStoredRefreshToken &&
+            stored.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew))
         {
             return stored;
         }
 
-        var refreshToken = stored?.RefreshToken ?? _settings.GetRequiredRefreshToken();
-        if (stored is not null && stored.IsRefreshTokenExpired(nowUtc, TimeSpan.Zero))
-        {
-            throw new BcsRefreshTokenExpiredException(stored.RefreshTokenExpiresAtUtc);
-        }
+        var refreshToken = ResolveRefreshTokenForRefresh(stored, nowUtc);
 
         await EnsureTokenStoreCanPersistAsync(cancellationToken).ConfigureAwait(false);
 
@@ -281,6 +281,31 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         }
 
         return tokenSet;
+    }
+
+    private string ResolveRefreshTokenForRefresh(BcsTokenSet? stored, DateTimeOffset nowUtc)
+    {
+        if (stored is null)
+        {
+            return _settings.GetRequiredRefreshToken();
+        }
+
+        if (stored.HasUsableRefreshToken(nowUtc))
+        {
+            return stored.RefreshToken;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_settings.RefreshToken))
+        {
+            return _settings.RefreshToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(stored.RefreshToken))
+        {
+            stored.ValidateStoredRefreshToken(nowUtc);
+        }
+
+        throw new BcsRefreshTokenExpiredException(stored.RefreshTokenExpiresAtUtc);
     }
 
     private async ValueTask EnsureTokenStoreCanPersistAsync(CancellationToken cancellationToken)

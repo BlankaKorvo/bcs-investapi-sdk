@@ -113,6 +113,35 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task GetAccessTokenAsync_WhenStoredRefreshTokenIsEmptyAndSettingsRefreshTokenExists_UsesSettingsRefreshTokenAndSavesRotatedTokenPair()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "refresh-3"))));
+        var store = new BcsInMemoryTokenStore();
+        await store.SaveAsync(new BcsTokenSet
+        {
+            AccessToken = "stored-access",
+            RefreshToken = "",
+            TokenType = "bearer",
+            ExpiresIn = 86400,
+            RefreshExpiresIn = 7776000,
+            ReceivedAtUtc = clock.UtcNow,
+            AccessTokenExpiresAtUtc = clock.UtcNow.AddHours(1),
+            RefreshTokenExpiresAtUtc = clock.UtcNow.AddDays(30),
+        });
+
+        var manager = CreateManager(handler, store, clock, refreshToken: "settings-refresh-1");
+
+        var accessToken = await manager.GetAccessTokenAsync();
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-2", accessToken);
+        Assert.Equal("refresh-3", stored?.RefreshToken);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenTokenStorePreflightFails_DoesNotCallAuthEndpoint()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -538,6 +567,45 @@ public sealed class BcsTokenManagerTests
 
         Assert.Contains("refresh token is not configured", exception.Message);
         Assert.Contains("token storage does not contain saved tokens", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateFactory_WhenSavedFileHasExpiredRefreshTokenAndSettingsRefreshTokenExists_UsesSettingsRefreshTokenAndOverwritesFile()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
+        var store = new BcsFileTokenStore(filePath);
+        await store.SaveAsync(new BcsTokenSet
+        {
+            AccessToken = "stored-access",
+            RefreshToken = "expired-stored-refresh",
+            TokenType = "bearer",
+            ExpiresIn = 86400,
+            RefreshExpiresIn = 7776000,
+            ReceivedAtUtc = clock.UtcNow.AddDays(-31),
+            AccessTokenExpiresAtUtc = clock.UtcNow.AddHours(1),
+            RefreshTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
+        });
+
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "refresh-3"))));
+        using var client = BcsInvestApiClientFactory.Create(
+            new BcsInvestApiSettings
+            {
+                RefreshToken = "settings-refresh-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                AuthUrl = new Uri("https://example.test/token"),
+                TokenStoragePath = filePath,
+            },
+            handler,
+            clock: clock);
+
+        var tokenSet = await client.Tokens.GetTokenSetAsync();
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-2", tokenSet.AccessToken);
+        Assert.Equal("refresh-3", stored?.RefreshToken);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
     }
 
     [Fact]

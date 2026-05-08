@@ -31,6 +31,45 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
+    public void Constructor_WithHttpAuthUrl_ThrowsByDefault()
+    {
+        var settings = new BcsInvestApiSettings
+        {
+            AuthUrl = new Uri("http://localhost/token"),
+            ClientId = BcsAuthClientIds.TradeApiRead,
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new BcsAuthService(
+                new HttpClient(new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())))),
+                settings));
+
+        Assert.Contains("absolute HTTPS URI", exception.Message);
+        Assert.Contains("http://localhost/token", exception.Message);
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WithHttpAuthUrlAndTestingOptIn_PostsForm()
+    {
+        var authUrl = new Uri("http://localhost/token");
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())));
+        var service = CreateService(
+            handler,
+            authUrl,
+            settings => settings.AllowInsecureHttpForTesting = true);
+
+        await service.GetAccessTokenAsync(new BcsAuthRequest
+        {
+            RefreshToken = "refresh-token-1",
+            ClientId = BcsAuthClientIds.TradeApiWrite,
+            GrantType = BcsGrantTypes.RefreshToken
+        });
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(authUrl, handler.LastRequest.RequestUri);
+    }
+
+    [Fact]
     public async Task GetAccessTokenAsync_ParsesSuccessfulResponse()
     {
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())));

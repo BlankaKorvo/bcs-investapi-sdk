@@ -23,6 +23,11 @@ public sealed class BcsInvestApiSettings
     public Uri AuthUrl { get; set; } = DefaultAuthUrl;
 
     /// <summary>
+    /// Allows plain HTTP auth URLs for explicit local tests. Keep false in production.
+    /// </summary>
+    public bool AllowInsecureHttpForTesting { get; set; }
+
+    /// <summary>
     /// Optional HTTP timeout. If null, HttpClient default timeout is used.
     /// </summary>
     public TimeSpan? Timeout { get; set; }
@@ -73,9 +78,10 @@ public sealed class BcsInvestApiSettings
             throw new InvalidOperationException("BCS auth URL is not configured. Set Bcs:AuthUrl.");
         }
 
-        if (!AuthUrl.IsAbsoluteUri || (AuthUrl.Scheme != Uri.UriSchemeHttps && AuthUrl.Scheme != Uri.UriSchemeHttp))
+        var isAllowedInsecureHttp = AuthUrl.Scheme == Uri.UriSchemeHttp && AllowInsecureHttpForTesting;
+        if (!AuthUrl.IsAbsoluteUri || (AuthUrl.Scheme != Uri.UriSchemeHttps && !isAllowedInsecureHttp))
         {
-            throw new InvalidOperationException($"BCS auth URL must be an absolute HTTP/HTTPS URI. Actual value: '{AuthUrl}'.");
+            throw new InvalidOperationException($"BCS auth URL must be an absolute HTTPS URI. Actual value: '{AuthUrl}'.");
         }
 
         if (!BcsAuthClientIds.IsKnown(ClientId))
