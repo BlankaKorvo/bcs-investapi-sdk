@@ -1,5 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
+using System.Text.Json;
 using Bcs.InvestApi.Time;
 
 internal static class BcsTokenSourcePreflight
@@ -17,6 +18,7 @@ internal static class BcsTokenSourcePreflight
         ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(clock);
 
+        var settingsHasRefreshToken = !string.IsNullOrWhiteSpace(settings.RefreshToken);
         BcsTokenSet? storedTokenSet;
         try
         {
@@ -34,6 +36,15 @@ internal static class BcsTokenSourcePreflight
                 $"BCS saved token storage could not be loaded within token store lock timeout ({settings.TokenStoreLockTimeout}). Ensure no other process holds the token storage lock.",
                 ex);
         }
+        catch (JsonException) when (settingsHasRefreshToken && tokenStore is IBcsTokenStoreCorruptionRecovery recovery)
+        {
+            await BackupCorruptedTokenStorageAsync(
+                settings,
+                recovery,
+                cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
         catch (Exception ex)
         {
             throw new InvalidOperationException(
@@ -41,7 +52,6 @@ internal static class BcsTokenSourcePreflight
                 ex);
         }
 
-        var settingsHasRefreshToken = !string.IsNullOrWhiteSpace(settings.RefreshToken);
         if (storedTokenSet is null)
         {
             if (settingsHasRefreshToken)
@@ -59,5 +69,28 @@ internal static class BcsTokenSourcePreflight
         }
 
         storedTokenSet.ValidateStoredRefreshToken(nowUtc);
+    }
+
+    private static async ValueTask BackupCorruptedTokenStorageAsync(
+        BcsInvestApiSettings settings,
+        IBcsTokenStoreCorruptionRecovery recovery,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(settings.TokenStoreLockTimeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            await recovery.BackupCorruptedTokenStorageAsync(linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new InvalidOperationException(
+                $"BCS corrupted token storage could not be backed up within token store lock timeout ({settings.TokenStoreLockTimeout}). Ensure no other process holds the token storage lock.",
+                ex);
+        }
     }
 }

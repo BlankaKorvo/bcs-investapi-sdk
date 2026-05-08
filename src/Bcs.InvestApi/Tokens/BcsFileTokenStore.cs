@@ -3,7 +3,7 @@ namespace Bcs.InvestApi.Tokens;
 using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
 
-public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordinator, IBcsTokenStorePreflight
+public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordinator, IBcsTokenStorePreflight, IBcsTokenStoreCorruptionRecovery
 {
     private static readonly byte[] PreflightProbeBytes = [0];
 
@@ -37,6 +37,18 @@ public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordina
             async ct =>
             {
                 await EnsureCanPersistCoreAsync(ct).ConfigureAwait(false);
+                return true;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    async ValueTask IBcsTokenStoreCorruptionRecovery.BackupCorruptedTokenStorageAsync(CancellationToken cancellationToken)
+    {
+        await _coordinator.ExecuteAsync(
+            async ct =>
+            {
+                await EnsureCanPersistCoreAsync(ct).ConfigureAwait(false);
+                BackupCorruptedTokenStorageCore();
                 return true;
             },
             cancellationToken).ConfigureAwait(false);
@@ -212,6 +224,27 @@ public sealed class BcsFileTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordina
     }
 
     private string GetTempPath() => $"{_filePath}.{Guid.NewGuid():N}.tmp";
+
+    private string GetCorruptBackupPath() => $"{_filePath}.corrupt.{Guid.NewGuid():N}.bak";
+
+    private void BackupCorruptedTokenStorageCore()
+    {
+        if (!File.Exists(_filePath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Move(_filePath, GetCorruptBackupPath());
+        }
+        catch (Exception ex)
+        {
+            throw new BcsTokenPersistenceException(
+                $"BCS saved token storage is corrupted and could not be backed up. Auth refresh was not attempted. Path='{_filePath}'.",
+                ex);
+        }
+    }
 
     private static void DeleteIfExists(string path)
     {

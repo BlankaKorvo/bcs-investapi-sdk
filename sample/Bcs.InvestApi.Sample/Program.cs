@@ -18,6 +18,7 @@ await using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettin
         "tokens.json"),
 });
 
+await client.Tokens.InitializeAsync();
 var token = await client.Tokens.GetTokenSetAsync();
 client.Tokens.StartAutoRefresh();
 

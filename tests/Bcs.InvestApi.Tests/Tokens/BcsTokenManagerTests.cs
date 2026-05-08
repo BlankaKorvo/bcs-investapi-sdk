@@ -167,6 +167,21 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task GetTokenSetAsync_WhenCorruptStoreCannotBeBackedUp_DoesNotCallAuthEndpoint()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
+        var store = new CorruptBackupFailingTokenStore();
+        var manager = CreateManager(handler, store, clock, refreshToken: "settings-refresh-1");
+
+        var exception = await Assert.ThrowsAsync<BcsTokenPersistenceException>(() => manager.GetTokenSetAsync().AsTask());
+
+        Assert.Contains("Auth refresh was not attempted", exception.Message);
+        Assert.Equal(0, handler.RequestCount);
+        Assert.False(store.SaveAttempted);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenAuthRequestThrowsTransientException_DoesNotRetryRefreshToken()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -549,7 +564,48 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public void GetTokenManagerFromDi_WhenNoRefreshTokenAndNoSavedFile_ThrowsAtResolve()
+    public async Task StartAutoRefresh_WhenAuthReturnsInvalidGrant_StopsRefreshLoop()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(
+            HttpStatusCode.BadRequest,
+            """
+            {
+              "error": "invalid_grant",
+              "error_description": "Session not active"
+            }
+            """)));
+        var store = new BcsInMemoryTokenStore();
+        var manager = CreateManager(handler, store, clock, refreshToken: "refresh-1");
+        var failure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        manager.AutoRefreshFailed += (_, args) => failure.TrySetResult(args.Exception);
+
+        manager.StartAutoRefresh();
+
+        var exception = await failure.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var authException = Assert.IsType<BcsAuthException>(exception);
+
+        var stopDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (manager.IsAutoRefreshRunning && DateTimeOffset.UtcNow < stopDeadline)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(10));
+        }
+
+        var requestCountAfterStop = handler.RequestCount;
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+        Assert.Equal("invalid_grant", authException.Error);
+        Assert.Same(authException, manager.LastAutoRefreshException);
+        Assert.False(manager.IsAutoRefreshRunning);
+        Assert.Equal(1, requestCountAfterStop);
+        Assert.Equal(requestCountAfterStop, handler.RequestCount);
+
+        await manager.StopAutoRefreshAsync();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenNoRefreshTokenAndNoSavedFile_Throws()
     {
         var services = new ServiceCollection();
         services.AddBcsInvestApiClient(settings =>
@@ -559,35 +615,46 @@ public sealed class BcsTokenManagerTests
         });
 
         using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<BcsTokenManager>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<BcsTokenManager>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.InitializeAsync().AsTask());
 
         Assert.Contains("refresh token is not configured", exception.Message);
         Assert.Contains("token storage does not contain saved tokens", exception.Message);
     }
 
     [Fact]
-    public async Task Constructor_WhenStartupPreflightLoadDoesNotComplete_UsesTokenStoreLockTimeout()
+    public void Constructor_WhenStartupPreflightLoadDoesNotComplete_DoesNotReadTokenStore()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
         var store = new CancellableHangingLoadTokenStore();
 
-        var constructionTask = Task.Run(() => CreateManager(
+        using var manager = CreateManager(
             handler,
             store,
             clock,
             refreshToken: "refresh-1",
-            tokenStoreLockTimeout: TimeSpan.FromMilliseconds(50)));
+            tokenStoreLockTimeout: TimeSpan.FromMilliseconds(50));
 
-        var completed = await Task.WhenAny(constructionTask, Task.Delay(TimeSpan.FromSeconds(5))) == constructionTask;
-        if (!completed)
-        {
-            store.Release();
-            throw new TimeoutException("BcsTokenManager construction did not honor TokenStoreLockTimeout.");
-        }
+        Assert.Equal(0, store.LoadCallCount);
+    }
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => constructionTask);
+    [Fact]
+    public async Task InitializeAsync_WhenStartupPreflightLoadDoesNotComplete_UsesTokenStoreLockTimeout()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
+        var store = new CancellableHangingLoadTokenStore();
+        using var manager = CreateManager(
+            handler,
+            store,
+            clock,
+            refreshToken: "refresh-1",
+            tokenStoreLockTimeout: TimeSpan.FromMilliseconds(50));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => manager.InitializeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Contains("token store lock timeout", exception.Message);
         Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
@@ -639,6 +706,7 @@ public sealed class BcsTokenManagerTests
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<BcsTokenManager>();
 
+        await manager.InitializeAsync();
         var tokenSet = await manager.GetTokenSetAsync();
 
         Assert.Equal("stored-access", tokenSet.AccessToken);
@@ -646,7 +714,7 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public void GetTokenManagerFromDi_WhenSavedFileContainsInvalidJson_ThrowsAtResolve()
+    public async Task InitializeAsync_WhenSavedFileContainsInvalidJson_Throws()
     {
         var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
@@ -661,15 +729,74 @@ public sealed class BcsTokenManagerTests
         });
 
         using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<BcsTokenManager>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<BcsTokenManager>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.InitializeAsync().AsTask());
 
         Assert.Contains("saved token storage could not be loaded", exception.Message);
         Assert.IsType<JsonException>(exception.InnerException);
     }
 
     [Fact]
-    public void GetTokenManagerFromDi_WhenSavedFileIsEmpty_ThrowsAtResolve()
+    public async Task InitializeAsync_WhenSavedFileContainsInvalidJsonAndSettingsRefreshTokenExists_BacksUpCorruptFileWithoutAuth()
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, "{ not-json");
+
+        var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
+        using var client = BcsInvestApiClientFactory.Create(
+            new BcsInvestApiSettings
+            {
+                RefreshToken = "settings-refresh-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                AuthUrl = new Uri("https://example.test/token"),
+                TokenStoragePath = filePath,
+            },
+            handler);
+
+        await client.Tokens.InitializeAsync();
+
+        var backupPath = AssertSingleCorruptBackup(filePath);
+        Assert.False(File.Exists(filePath));
+        Assert.Equal("{ not-json", File.ReadAllText(backupPath));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetTokenSetAsync_WhenSavedFileContainsInvalidJsonAndSettingsRefreshTokenExists_BacksUpCorruptFileAndOverwritesFile()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        File.WriteAllText(filePath, "{ not-json");
+
+        var store = new BcsFileTokenStore(filePath);
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "refresh-3"))));
+        using var client = BcsInvestApiClientFactory.Create(
+            new BcsInvestApiSettings
+            {
+                RefreshToken = "settings-refresh-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                AuthUrl = new Uri("https://example.test/token"),
+                TokenStoragePath = filePath,
+            },
+            handler,
+            clock: clock);
+
+        var tokenSet = await client.Tokens.GetTokenSetAsync();
+        var stored = await store.LoadAsync();
+        var backupPath = AssertSingleCorruptBackup(filePath);
+
+        Assert.Equal("access-2", tokenSet.AccessToken);
+        Assert.Equal("refresh-3", stored?.RefreshToken);
+        Assert.Equal("{ not-json", File.ReadAllText(backupPath));
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenSavedFileIsEmpty_Throws()
     {
         var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
@@ -684,15 +811,16 @@ public sealed class BcsTokenManagerTests
         });
 
         using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<BcsTokenManager>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<BcsTokenManager>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.InitializeAsync().AsTask());
 
         Assert.Contains("refresh token is not configured", exception.Message);
         Assert.Contains("token storage does not contain saved tokens", exception.Message);
     }
 
     [Fact]
-    public async Task GetTokenManagerFromDi_WhenSavedFileHasEmptyRefreshToken_ThrowsAtResolve()
+    public async Task InitializeAsync_WhenSavedFileHasEmptyRefreshToken_Throws()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
@@ -719,24 +847,39 @@ public sealed class BcsTokenManagerTests
         services.AddSingleton<IBcsClock>(clock);
 
         await using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<BcsTokenManager>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<BcsTokenManager>());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.InitializeAsync().AsTask());
 
         Assert.Contains("empty refresh token", exception.Message);
     }
 
     [Fact]
-    public void CreateFactory_WhenNoRefreshTokenAndNoSavedFile_ThrowsAtCreate()
+    public async Task CreateFactory_WhenNoRefreshTokenAndNoSavedFile_InitializeAsyncThrows()
     {
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
-            {
-                ClientId = BcsAuthClientIds.TradeApiRead,
-                AuthUrl = new Uri("https://example.test/token"),
-            }));
+        using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
+        {
+            ClientId = BcsAuthClientIds.TradeApiRead,
+            AuthUrl = new Uri("https://example.test/token"),
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.Tokens.InitializeAsync().AsTask());
 
         Assert.Contains("refresh token is not configured", exception.Message);
         Assert.Contains("token storage does not contain saved tokens", exception.Message);
+    }
+
+    [Fact]
+    public void CreateFactory_WhenNoRefreshTokenAndNoSavedFile_DoesNotThrowAtCreate()
+    {
+        using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
+        {
+            ClientId = BcsAuthClientIds.TradeApiRead,
+            AuthUrl = new Uri("https://example.test/token"),
+        });
+
+        Assert.NotNull(client.Tokens);
     }
 
     [Fact]
@@ -769,6 +912,7 @@ public sealed class BcsTokenManagerTests
             handler,
             clock: clock);
 
+        await client.Tokens.InitializeAsync();
         var tokenSet = await client.Tokens.GetTokenSetAsync();
         var stored = await store.LoadAsync();
 
@@ -779,7 +923,7 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task CreateFactory_WhenSavedFileHasExpiredRefreshToken_ThrowsAtCreate()
+    public async Task CreateFactory_WhenSavedFileHasExpiredRefreshToken_InitializeAsyncThrows()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var filePath = Path.Combine(Path.GetTempPath(), "bcs-token-manager-tests", $"{Guid.NewGuid():N}.json");
@@ -796,15 +940,17 @@ public sealed class BcsTokenManagerTests
             RefreshTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
         });
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            BcsInvestApiClientFactory.Create(
-                new BcsInvestApiSettings
-                {
-                    ClientId = BcsAuthClientIds.TradeApiRead,
-                    AuthUrl = new Uri("https://example.test/token"),
-                    TokenStoragePath = filePath,
-                },
-                clock: clock));
+        using var client = BcsInvestApiClientFactory.Create(
+            new BcsInvestApiSettings
+            {
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                AuthUrl = new Uri("https://example.test/token"),
+                TokenStoragePath = filePath,
+            },
+            clock: clock);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.Tokens.InitializeAsync().AsTask());
 
         Assert.Contains("saved refresh token is expired", exception.Message);
     }
@@ -854,6 +1000,13 @@ public sealed class BcsTokenManagerTests
         }
         """;
 
+    private static string AssertSingleCorruptBackup(string filePath)
+    {
+        var directory = Path.GetDirectoryName(filePath)!;
+        var pattern = $"{Path.GetFileName(filePath)}.corrupt.*.bak";
+        return Assert.Single(Directory.GetFiles(directory, pattern));
+    }
+
     private sealed class CountingHttpClientFactory : IHttpClientFactory
     {
         private readonly Func<HttpClient> _httpClientFactory;
@@ -889,6 +1042,24 @@ public sealed class BcsTokenManagerTests
 
         public ValueTask EnsureCanPersistAsync(CancellationToken cancellationToken = default) =>
             throw new UnauthorizedAccessException("Token storage path is not writable.");
+    }
+
+    private sealed class CorruptBackupFailingTokenStore : IBcsTokenStore, IBcsTokenStoreCorruptionRecovery
+    {
+        public bool SaveAttempted { get; private set; }
+
+        public ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default) =>
+            throw new JsonException("Corrupted token JSON.");
+
+        public ValueTask SaveAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken = default)
+        {
+            SaveAttempted = true;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask BackupCorruptedTokenStorageAsync(CancellationToken cancellationToken = default) =>
+            throw new BcsTokenPersistenceException(
+                "BCS token storage is not writable. Auth refresh was not attempted.");
     }
 
     private sealed class SaveFailingTokenStore : IBcsTokenStore
@@ -974,10 +1145,14 @@ public sealed class BcsTokenManagerTests
 
         public bool LoadCancellationObserved { get; private set; }
 
+        public int LoadCallCount { get; private set; }
+
         public void Release() => _release.TrySetResult(null);
 
         public async ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default)
         {
+            LoadCallCount++;
+
             try
             {
                 return await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);

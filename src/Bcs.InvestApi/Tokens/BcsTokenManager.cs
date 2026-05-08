@@ -1,5 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
+using System.Text.Json;
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Time;
 using Microsoft.Extensions.Options;
@@ -216,30 +217,44 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private async Task RunAutoRefreshAsync(CancellationToken cancellationToken)
     {
-        await TryAutoRefreshOnceAsync(cancellationToken).ConfigureAwait(false);
+        if (!await TryAutoRefreshOnceAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
 
         using var timer = new PeriodicTimer(_settings.AutoRefreshInterval);
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
         {
-            await TryAutoRefreshOnceAsync(cancellationToken).ConfigureAwait(false);
+            if (!await TryAutoRefreshOnceAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
         }
     }
 
-    private async Task TryAutoRefreshOnceAsync(CancellationToken cancellationToken)
+    private async Task<bool> TryAutoRefreshOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
             await RefreshIfRequiredAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
             LastAutoRefreshException = null;
+            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
+        catch (BcsAuthException ex) when (string.Equals(ex.Error, "invalid_grant", StringComparison.Ordinal))
+        {
+            LastAutoRefreshException = ex;
+            OnAutoRefreshFailed(ex);
+            return false;
+        }
         catch (Exception ex)
         {
             LastAutoRefreshException = ex;
             OnAutoRefreshFailed(ex);
+            return true;
         }
     }
 
@@ -279,7 +294,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private async ValueTask<BcsTokenSet> RefreshIfRequiredCoreAsync(bool forceRefresh, CancellationToken cancellationToken)
     {
-        var stored = await LoadTokenSetForRefreshAsync(cancellationToken).ConfigureAwait(false);
+        var stored = await LoadTokenSetForRefreshAsyncOrRecoverCorruptedStorageAsync(cancellationToken).ConfigureAwait(false);
         var nowUtc = _clock.UtcNow;
         var hasUsableStoredRefreshToken = stored?.HasUsableRefreshToken(nowUtc) == true;
 
@@ -381,6 +396,21 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         _useCoordinatedTokenStoreOperations
             ? _coordinatedTokenStoreOperations!.LoadAsync(cancellationToken)
             : _tokenStore.LoadAsync(cancellationToken);
+
+    private async ValueTask<BcsTokenSet?> LoadTokenSetForRefreshAsyncOrRecoverCorruptedStorageAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await LoadTokenSetForRefreshAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonException) when (
+            !string.IsNullOrWhiteSpace(_settings.RefreshToken) &&
+            _tokenStore is IBcsTokenStoreCorruptionRecovery recovery)
+        {
+            await recovery.BackupCorruptedTokenStorageAsync(cancellationToken).ConfigureAwait(false);
+            return null;
+        }
+    }
 
     private ValueTask SaveTokenSetForRefreshAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken) =>
         _useCoordinatedTokenStoreOperations

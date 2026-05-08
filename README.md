@@ -72,6 +72,7 @@ Response fields supported by DTO:
 
 `BcsTokenManager` keeps the raw token pair as infrastructure state:
 
+- Construction and DI resolution only validate settings; call `InitializeAsync()` when startup should fail fast on token storage state.
 - On first call it uses `BcsInvestApiSettings.RefreshToken` if storage is empty.
 - After successful authorization it saves both `access_token` and the rotated `refresh_token`.
 - Next refresh uses the stored rotated `refresh_token`, not the original token from settings.
@@ -96,6 +97,7 @@ await using var client = BcsInvestApiClientFactory.Create(
     refreshToken: "<initial-refresh-token>",
     clientId: BcsAuthClientIds.TradeApiRead);
 
+await client.Tokens.InitializeAsync();
 string accessToken = await client.Tokens.GetAccessTokenAsync();
 ```
 
@@ -135,6 +137,7 @@ await using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettin
     AutoRefreshInterval = TimeSpan.FromMinutes(1),
 });
 
+await client.Tokens.InitializeAsync();
 BcsTokenSet token = await client.Tokens.GetTokenSetAsync();
 client.Tokens.StartAutoRefresh();
 ```
@@ -183,6 +186,12 @@ services.AddBcsInvestApiClient(settings =>
     settings.ClientId = BcsAuthClientIds.TradeApiRead;
     settings.TokenStoragePath = @"C:\secure\bcs\tokens.json";
 });
+```
+
+Resolving `BcsTokenManager` from DI does not read token storage. If the app needs startup fail-fast validation, call:
+
+```csharp
+await provider.GetRequiredService<BcsTokenManager>().InitializeAsync(ct);
 ```
 
 Then inject either the facade:
