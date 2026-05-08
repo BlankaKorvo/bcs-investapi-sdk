@@ -1,6 +1,7 @@
 namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,12 @@ public static class BcsInvestApiClientExtensions
     {
         services.AddSingleton<IBcsClock, BcsSystemClock>();
 
+        services.AddSingleton<BcsHttpRequestSender>(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            return BcsInvestApiClientComposition.CreateHttpRequestSender(settings);
+        });
+
         services.AddSingleton<IBcsTokenStore>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
@@ -61,7 +68,8 @@ public static class BcsInvestApiClientExtensions
 
             return BcsInvestApiClientComposition.CreateAuthService(
                 settings,
-                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName));
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
+                sp.GetRequiredService<BcsHttpRequestSender>());
         });
 
         services.AddSingleton<BcsTokenManager>(sp =>

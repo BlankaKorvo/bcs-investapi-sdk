@@ -1,6 +1,7 @@
 namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 
@@ -36,7 +37,19 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        return new BcsAuthService(httpClient, settings);
+        return CreateAuthService(settings, httpClient, CreateHttpRequestSender(settings));
+    }
+
+    public static BcsAuthService CreateAuthService(
+        BcsInvestApiSettings settings,
+        HttpClient httpClient,
+        BcsHttpRequestSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsAuthService(httpClient, settings, requestSender);
     }
 
     public static BcsAuthService CreateAuthService(
@@ -46,7 +59,27 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
 
-        return new BcsAuthService(httpClientFactory, settings);
+        return CreateAuthService(settings, httpClientFactory, CreateHttpRequestSender(settings));
+    }
+
+    public static BcsAuthService CreateAuthService(
+        BcsInvestApiSettings settings,
+        Func<HttpClient> httpClientFactory,
+        BcsHttpRequestSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsAuthService(httpClientFactory, settings, requestSender);
+    }
+
+    public static BcsHttpRequestSender CreateHttpRequestSender(BcsInvestApiSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
+        return new BcsHttpRequestSender(settings);
     }
 
     public static BcsTokenManager CreateTokenManager(

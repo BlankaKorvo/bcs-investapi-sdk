@@ -9,6 +9,7 @@ public sealed class BcsAuthService
 {
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
+    private readonly BcsHttpRequestSender _requestSender;
     private readonly BcsInvestApiSettings _settings;
 
     public BcsAuthService(HttpClient httpClient, IOptions<BcsInvestApiSettings> options)
@@ -26,14 +27,32 @@ public sealed class BcsAuthService
     {
     }
 
+    internal BcsAuthService(
+        HttpClient httpClient,
+        BcsInvestApiSettings settings,
+        BcsHttpRequestSender requestSender)
+        : this(() => httpClient, settings, disposeHttpClientAfterRequest: false, requestSender)
+    {
+    }
+
+    internal BcsAuthService(
+        Func<HttpClient> httpClientFactory,
+        BcsInvestApiSettings settings,
+        BcsHttpRequestSender requestSender)
+        : this(httpClientFactory, settings, disposeHttpClientAfterRequest: true, requestSender)
+    {
+    }
+
     private BcsAuthService(
         Func<HttpClient> httpClientFactory,
         BcsInvestApiSettings settings,
-        bool disposeHttpClientAfterRequest)
+        bool disposeHttpClientAfterRequest,
+        BcsHttpRequestSender? requestSender = null)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
+        _requestSender = requestSender ?? new BcsHttpRequestSender(settings);
 
         _settings.ValidateTransportSettings();
     }
@@ -45,25 +64,14 @@ public sealed class BcsAuthService
         ArgumentNullException.ThrowIfNull(authRequest);
         authRequest.Validate();
 
-        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, _settings.AuthUrl);
-
-        requestMessage.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-
-        requestMessage.Content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["client_id"] = authRequest.ClientId,
-            ["refresh_token"] = authRequest.RefreshToken,
-            ["grant_type"] = authRequest.GrantType,
-        });
-
         var httpClient = _httpClientFactory();
 
         try
         {
-            using var response = await httpClient
-                .SendAsync(requestMessage, cancellationToken)
+            using var exchange = await _requestSender
+                .SendAsync(httpClient, () => CreateRequestMessage(authRequest), cancellationToken)
                 .ConfigureAwait(false);
+            var response = exchange.Response;
 
             var responseBody = await response.Content
                 .ReadAsStringAsync(cancellationToken)
@@ -100,6 +108,23 @@ public sealed class BcsAuthService
                 httpClient.Dispose();
             }
         }
+    }
+
+    private HttpRequestMessage CreateRequestMessage(BcsAuthRequest authRequest)
+    {
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, _settings.AuthUrl);
+
+        requestMessage.Headers.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+
+        requestMessage.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_id"] = authRequest.ClientId,
+            ["refresh_token"] = authRequest.RefreshToken,
+            ["grant_type"] = authRequest.GrantType,
+        });
+
+        return requestMessage;
     }
 
     private static BcsAuthErrorResponse? TryDeserializeError(string responseBody)

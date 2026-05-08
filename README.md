@@ -21,6 +21,7 @@ Included:
 - In-memory token storage: `BcsInMemoryTokenStore`.
 - JSON file token storage: `BcsFileTokenStore`.
 - Timer-based token refresh via `BcsTokenManager.StartAutoRefresh()`.
+- Polly-based HTTP retries for transient request failures.
 - Raw auth request/response DTOs.
 - Typed `BcsAuthException` for non-success auth responses.
 - Typed `BcsRefreshTokenExpiredException` for locally known expired stored refresh token.
@@ -218,6 +219,19 @@ public sealed class MyApiClient
     }
 }
 ```
+
+## HTTP retries
+
+All SDK HTTP requests go through the shared Polly retry sender. It retries `HttpRequestException`, timeout exceptions,
+HTTP `408`, HTTP `429`, and HTTP `5xx` responses. Client/auth errors such as `400 invalid_grant` are not retried.
+
+Defaults:
+
+- `HttpRetryAttempts = 3`
+- `HttpRetryBaseDelay = 250ms`
+- exponential delays: 250ms, 500ms, 1000ms
+
+Set `HttpRetryAttempts = 0` to disable retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`.
 
 ## Error handling
 

@@ -43,7 +43,8 @@ public static class BcsInvestApiClientFactory
 
         tokenStore ??= BcsInvestApiClientComposition.CreateTokenStore(settings);
 
-        var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient);
+        var requestSender = BcsInvestApiClientComposition.CreateHttpRequestSender(settings);
+        var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient, requestSender);
         var tokens = BcsInvestApiClientComposition.CreateTokenManager(
             auth,
             tokenStore,
