@@ -37,13 +37,13 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        return CreateAuthService(settings, httpClient, CreateHttpRequestSender(settings));
+        return CreateAuthService(settings, httpClient, CreateAuthRequestSender(settings));
     }
 
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
-        BcsHttpRequestSender requestSender)
+        BcsAuthRequestSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -59,19 +59,35 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
 
-        return CreateAuthService(settings, httpClientFactory, CreateHttpRequestSender(settings));
+        return CreateAuthService(settings, httpClientFactory, CreateAuthRequestSender(settings));
     }
 
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
-        BcsHttpRequestSender requestSender)
+        BcsAuthRequestSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         ArgumentNullException.ThrowIfNull(requestSender);
 
         return new BcsAuthService(httpClientFactory, settings, requestSender);
+    }
+
+    public static BcsAuthRequestSender CreateAuthRequestSender(BcsInvestApiSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
+        return new BcsAuthRequestSender(settings);
+    }
+
+    public static BcsApiRequestSender CreateApiRequestSender(BcsInvestApiSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
+        return new BcsApiRequestSender(settings);
     }
 
     public static BcsHttpRequestSender CreateHttpRequestSender(BcsInvestApiSettings settings)

@@ -167,6 +167,24 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenAuthRequestThrowsTransientException_DoesNotRetryRefreshToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            throw new HttpRequestException("Connection reset after processing."));
+        var store = new BcsInMemoryTokenStore();
+        var manager = CreateManager(handler, store, clock, refreshToken: "initial-refresh-secret");
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => manager.RefreshAsync().AsTask());
+        var stored = await store.LoadAsync();
+
+        Assert.Contains("Connection reset", exception.Message);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=initial-refresh-secret", handler.LastRequestContent);
+        Assert.Null(stored);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenSaveFailsAfterAuth_ThrowsPersistenceExceptionWithoutTokens()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -206,6 +224,77 @@ public sealed class BcsTokenManagerTests
         Assert.Equal(1, handler.RequestCount);
         Assert.True(store.SaveAttempted);
         Assert.True(store.SaveCancellationObserved);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCallerCancelsAfterAuthRequestStarted_SavesRotatedTokenPair()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var authCancellationCount = 0;
+        var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            using var registration = cancellationToken.Register(() => Interlocked.Increment(ref authCancellationCount));
+            requestEntered.SetResult();
+            await releaseResponse.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            return JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "rotated-refresh-secret"));
+        });
+        var store = new BcsInMemoryTokenStore();
+        var manager = CreateManager(handler, store, clock, refreshToken: "initial-refresh-secret");
+        using var callerCts = new CancellationTokenSource();
+
+        var refreshTask = manager.RefreshAsync(callerCts.Token).AsTask();
+        await requestEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        callerCts.Cancel();
+        releaseResponse.SetResult();
+
+        var tokenSet = await refreshTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-1", tokenSet.AccessToken);
+        Assert.Equal("rotated-refresh-secret", tokenSet.RefreshToken);
+        Assert.Equal("rotated-refresh-secret", stored?.RefreshToken);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal(0, Volatile.Read(ref authCancellationCount));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenAuthDoesNotComplete_UsesRefreshOperationTimeout()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var authCancellationObserved = false;
+        var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                authCancellationObserved = true;
+                throw;
+            }
+
+            throw new InvalidOperationException("Auth endpoint must not complete.");
+        });
+        var store = new BcsInMemoryTokenStore();
+        var manager = CreateManager(
+            handler,
+            store,
+            clock,
+            refreshToken: "initial-refresh-secret",
+            tokenRefreshOperationTimeout: TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => manager.RefreshAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        var stored = await store.LoadAsync();
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.True(authCancellationObserved);
+        Assert.Null(stored);
     }
 
     [Fact]
@@ -644,7 +733,8 @@ public sealed class BcsTokenManagerTests
         IBcsTokenStore store,
         FakeBcsClock clock,
         string refreshToken,
-        TimeSpan? tokenPersistenceTimeout = null)
+        TimeSpan? tokenPersistenceTimeout = null,
+        TimeSpan? tokenRefreshOperationTimeout = null)
     {
         var settings = new BcsInvestApiSettings
         {
@@ -653,6 +743,7 @@ public sealed class BcsTokenManagerTests
             AuthUrl = new Uri("https://example.test/token"),
             TokenRefreshSkew = TimeSpan.FromMinutes(5),
             AutoRefreshInterval = TimeSpan.FromMilliseconds(50),
+            TokenRefreshOperationTimeout = tokenRefreshOperationTimeout ?? TimeSpan.FromSeconds(60),
             TokenPersistenceTimeout = tokenPersistenceTimeout ?? TimeSpan.FromSeconds(30),
         };
 

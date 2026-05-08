@@ -7,17 +7,35 @@ internal static class BcsHttpRetryPolicy
 {
     public static IAsyncPolicy<BcsHttpExchange> Create(BcsInvestApiSettings settings)
     {
+        return CreateForApi(settings);
+    }
+
+    public static IAsyncPolicy<BcsHttpExchange> CreateForAuth(BcsInvestApiSettings settings)
+    {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
+        return Create(settings.AuthRetryAttempts, settings.HttpRetryBaseDelay);
+    }
+
+    public static IAsyncPolicy<BcsHttpExchange> CreateForApi(BcsInvestApiSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
+        return Create(settings.HttpRetryAttempts, settings.HttpRetryBaseDelay);
+    }
+
+    private static IAsyncPolicy<BcsHttpExchange> Create(int retryAttempts, TimeSpan retryBaseDelay)
+    {
         return Policy<BcsHttpExchange>
             .Handle<HttpRequestException>()
             .Or<TimeoutException>()
             .Or<TaskCanceledException>(exception => exception.InnerException is TimeoutException)
             .OrResult(exchange => IsTransient(exchange.Response.StatusCode))
             .WaitAndRetryAsync(
-                settings.HttpRetryAttempts,
-                retryAttempt => CalculateDelay(settings.HttpRetryBaseDelay, retryAttempt),
+                retryAttempts,
+                retryAttempt => CalculateDelay(retryBaseDelay, retryAttempt),
                 onRetry: (outcome, _, _, _) => outcome.Result?.Dispose());
     }
 

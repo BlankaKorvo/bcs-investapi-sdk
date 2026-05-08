@@ -43,10 +43,10 @@ public static class BcsInvestApiClientExtensions
     {
         services.AddSingleton<IBcsClock, BcsSystemClock>();
 
-        services.AddSingleton<BcsHttpRequestSender>(sp =>
+        services.AddSingleton<BcsAuthRequestSender>(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            return BcsInvestApiClientComposition.CreateHttpRequestSender(settings);
+            return BcsInvestApiClientComposition.CreateAuthRequestSender(settings);
         });
 
         services.AddSingleton<IBcsTokenStore>(sp =>
@@ -69,7 +69,7 @@ public static class BcsInvestApiClientExtensions
             return BcsInvestApiClientComposition.CreateAuthService(
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
-                sp.GetRequiredService<BcsHttpRequestSender>());
+                sp.GetRequiredService<BcsAuthRequestSender>());
         });
 
         services.AddSingleton<BcsTokenManager>(sp =>

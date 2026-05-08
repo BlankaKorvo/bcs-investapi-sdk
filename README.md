@@ -21,7 +21,7 @@ Included:
 - In-memory token storage: `BcsInMemoryTokenStore`.
 - JSON file token storage: `BcsFileTokenStore`.
 - Timer-based token refresh via `BcsTokenManager.StartAutoRefresh()`.
-- Polly-based HTTP retries for transient request failures.
+- Separate auth and API HTTP senders: auth refresh has no retries by default, API requests can use Polly retries.
 - Raw auth request/response DTOs.
 - Typed `BcsAuthException` for non-success auth responses.
 - Typed `BcsRefreshTokenExpiredException` for locally known expired stored refresh token.
@@ -225,16 +225,22 @@ public sealed class MyApiClient
 
 ## HTTP retries
 
-All SDK HTTP requests go through the shared Polly retry sender. It retries `HttpRequestException`, timeout exceptions,
-HTTP `408`, HTTP `429`, and HTTP `5xx` responses. Client/auth errors such as `400 invalid_grant` are not retried.
+Auth refresh-token exchange uses a dedicated sender with retries disabled by default. Refresh tokens rotate on
+successful exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed
+first request into a later `400 invalid_grant` and lose the newly issued refresh token.
+
+Regular API requests use the API retry sender. It retries `HttpRequestException`, timeout exceptions, HTTP `408`,
+HTTP `429`, and HTTP `5xx` responses. Client/auth errors such as `400 invalid_grant` are not retried.
 
 Defaults:
 
+- `AuthRetryAttempts = 0`
 - `HttpRetryAttempts = 3`
 - `HttpRetryBaseDelay = 250ms`
-- exponential delays: 250ms, 500ms, 1000ms
+- API exponential delays: 250ms, 500ms, 1000ms
 
-Set `HttpRetryAttempts = 0` to disable retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`.
+Set `HttpRetryAttempts = 0` to disable API retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`. Keep
+`AuthRetryAttempts = 0` unless the caller has an external guarantee that retrying the refresh-token exchange is safe.
 
 ## Error handling
 

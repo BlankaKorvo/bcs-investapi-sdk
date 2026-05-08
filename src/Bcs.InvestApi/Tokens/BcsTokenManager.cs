@@ -257,6 +257,10 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         var refreshToken = ResolveRefreshTokenForRefresh(stored, nowUtc);
 
         await EnsureTokenStoreCanPersistAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // From this point the refresh exchange may rotate the refresh token.
+        using var refreshOperationCts = new CancellationTokenSource(_settings.TokenRefreshOperationTimeout);
 
         var response = await _authService.GetAccessTokenAsync(
             new BcsAuthRequest
@@ -265,14 +269,17 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
                 RefreshToken = refreshToken,
                 GrantType = BcsGrantTypes.RefreshToken,
             },
-            cancellationToken).ConfigureAwait(false);
+            refreshOperationCts.Token).ConfigureAwait(false);
 
         var tokenSet = BcsTokenSet.FromAuthResponse(response, _clock.UtcNow);
 
         try
         {
             // After auth succeeds, cancellation must not interrupt persistence of a rotated refresh token.
-            using var persistenceCts = new CancellationTokenSource(_settings.TokenPersistenceTimeout);
+            using var persistenceTimeoutCts = new CancellationTokenSource(_settings.TokenPersistenceTimeout);
+            using var persistenceCts = CancellationTokenSource.CreateLinkedTokenSource(
+                refreshOperationCts.Token,
+                persistenceTimeoutCts.Token);
             await SaveTokenSetForRefreshAsync(tokenSet, persistenceCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)

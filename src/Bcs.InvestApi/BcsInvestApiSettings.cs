@@ -33,6 +33,12 @@ public sealed class BcsInvestApiSettings
     public TimeSpan? Timeout { get; set; }
 
     /// <summary>
+    /// Maximum number of automatic retry attempts for auth refresh-token exchange after the initial request.
+    /// Default: 0. Refresh tokens rotate, so automatic retries are disabled by default.
+    /// </summary>
+    public int AuthRetryAttempts { get; set; } = 0;
+
+    /// <summary>
     /// Maximum number of HTTP retry attempts after the initial request.
     /// Default: 3. Set to 0 to disable retries.
     /// </summary>
@@ -56,6 +62,13 @@ public sealed class BcsInvestApiSettings
     /// Default: 1 minute.
     /// </summary>
     public TimeSpan AutoRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Maximum total time allowed for one refresh-token exchange and token persistence transaction once refresh starts.
+    /// Caller cancellation is intentionally ignored during this operation so a rotated refresh token is not lost.
+    /// Default: 60 seconds.
+    /// </summary>
+    public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Maximum time allowed to persist tokens after a successful auth refresh.
@@ -94,6 +107,11 @@ public sealed class BcsInvestApiSettings
             throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
         }
 
+        if (AuthRetryAttempts < 0)
+        {
+            throw new InvalidOperationException("BCS auth retry attempts must be greater than or equal to zero.");
+        }
+
         if (HttpRetryAttempts < 0)
         {
             throw new InvalidOperationException("BCS HTTP retry attempts must be greater than or equal to zero.");
@@ -117,6 +135,11 @@ public sealed class BcsInvestApiSettings
         if (AutoRefreshInterval <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("BCS auto-refresh interval must be greater than zero.");
+        }
+
+        if (TokenRefreshOperationTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("BCS token refresh operation timeout must be greater than zero.");
         }
 
         if (TokenPersistenceTimeout <= TimeSpan.Zero)
