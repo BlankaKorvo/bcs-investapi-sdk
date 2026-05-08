@@ -5,28 +5,38 @@ using Polly;
 
 internal static class BcsHttpRetryPolicy
 {
-    public static IAsyncPolicy<BcsHttpExchange> Create(BcsInvestApiSettings settings)
-    {
-        return CreateForApi(settings);
-    }
-
-    public static IAsyncPolicy<BcsHttpExchange> CreateForAuth(BcsInvestApiSettings settings)
+    public static IAsyncPolicy<BcsHttpExchange> CreateFor(
+        BcsInvestApiSettings settings,
+        BcsRequestSafety safety)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
-        return Create(settings.AuthRetryAttempts, settings.HttpRetryBaseDelay);
+        return safety switch
+        {
+            BcsRequestSafety.IdempotentRead or BcsRequestSafety.IdempotentQueryPost =>
+                CreateRetrying(settings.HttpRetryAttempts, settings.HttpRetryBaseDelay),
+            BcsRequestSafety.NonIdempotentCommand =>
+                Policy.NoOpAsync<BcsHttpExchange>(),
+            BcsRequestSafety.TokenRefresh =>
+                CreateRetrying(settings.AuthRetryAttempts, settings.HttpRetryBaseDelay),
+            _ => throw new ArgumentOutOfRangeException(nameof(safety), safety, null),
+        };
     }
 
-    public static IAsyncPolicy<BcsHttpExchange> CreateForApi(BcsInvestApiSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
+    public static IAsyncPolicy<BcsHttpExchange> CreateForRead(BcsInvestApiSettings settings) =>
+        CreateFor(settings, BcsRequestSafety.IdempotentRead);
 
-        return Create(settings.HttpRetryAttempts, settings.HttpRetryBaseDelay);
-    }
+    public static IAsyncPolicy<BcsHttpExchange> CreateForIdempotentQueryPost(BcsInvestApiSettings settings) =>
+        CreateFor(settings, BcsRequestSafety.IdempotentQueryPost);
 
-    private static IAsyncPolicy<BcsHttpExchange> Create(int retryAttempts, TimeSpan retryBaseDelay)
+    public static IAsyncPolicy<BcsHttpExchange> CreateForCommand(BcsInvestApiSettings settings) =>
+        CreateFor(settings, BcsRequestSafety.NonIdempotentCommand);
+
+    public static IAsyncPolicy<BcsHttpExchange> CreateForTokenRefresh(BcsInvestApiSettings settings) =>
+        CreateFor(settings, BcsRequestSafety.TokenRefresh);
+
+    private static IAsyncPolicy<BcsHttpExchange> CreateRetrying(int retryAttempts, TimeSpan retryBaseDelay)
     {
         return Policy<BcsHttpExchange>
             .Handle<HttpRequestException>()

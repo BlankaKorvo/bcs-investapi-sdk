@@ -48,6 +48,19 @@ public static class BcsInvestApiClientExtensions
             var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
             return BcsInvestApiClientComposition.CreateAuthRequestSender(settings);
         });
+        services.AddSingleton<IBcsAuthHttpSender>(sp => sp.GetRequiredService<BcsAuthRequestSender>());
+
+        services.AddSingleton<IBcsReadHttpSender>(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            return BcsInvestApiClientComposition.CreateReadHttpSender(settings);
+        });
+
+        services.AddSingleton<IBcsCommandHttpSender>(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            return BcsInvestApiClientComposition.CreateCommandHttpSender(settings);
+        });
 
         services.AddSingleton<IBcsTokenStore>(sp =>
         {
@@ -69,7 +82,7 @@ public static class BcsInvestApiClientExtensions
             return BcsInvestApiClientComposition.CreateAuthService(
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
-                sp.GetRequiredService<BcsAuthRequestSender>());
+                sp.GetRequiredService<IBcsAuthHttpSender>());
         });
 
         services.AddSingleton<BcsTokenManager>(sp =>

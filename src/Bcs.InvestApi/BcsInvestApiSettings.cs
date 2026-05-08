@@ -39,8 +39,8 @@ public sealed class BcsInvestApiSettings
     public int AuthRetryAttempts { get; set; } = 0;
 
     /// <summary>
-    /// Maximum number of HTTP retry attempts after the initial request.
-    /// Default: 3. Set to 0 to disable retries.
+    /// Maximum number of HTTP retry attempts for idempotent read/query API requests after the initial request.
+    /// Default: 3. Set to 0 to disable read/query retries.
     /// </summary>
     public int HttpRetryAttempts { get; set; } = 3;
 

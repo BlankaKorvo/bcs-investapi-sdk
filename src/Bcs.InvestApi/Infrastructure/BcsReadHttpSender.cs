@@ -1,15 +1,15 @@
 namespace Bcs.InvestApi.Infrastructure;
 
-internal sealed class BcsAuthRequestSender : IBcsAuthHttpSender
+internal sealed class BcsReadHttpSender : IBcsReadHttpSender
 {
     private readonly BcsHttpRequestSender _sender;
 
-    public BcsAuthRequestSender(BcsInvestApiSettings settings)
-        : this(new BcsHttpRequestSender(BcsHttpRetryPolicy.CreateForTokenRefresh(settings)))
+    public BcsReadHttpSender(BcsInvestApiSettings settings)
+        : this(new BcsHttpRequestSender(BcsHttpRetryPolicy.CreateForRead(settings)))
     {
     }
 
-    internal BcsAuthRequestSender(BcsHttpRequestSender sender)
+    internal BcsReadHttpSender(BcsHttpRequestSender sender)
     {
         _sender = sender ?? throw new ArgumentNullException(nameof(sender));
     }

@@ -21,7 +21,7 @@ Included:
 - In-memory token storage: `BcsInMemoryTokenStore`.
 - JSON file token storage: `BcsFileTokenStore`.
 - Timer-based token refresh via `BcsTokenManager.StartAutoRefresh()`.
-- Separate auth and API HTTP senders: auth refresh has no retries by default, API requests can use Polly retries.
+- Separate auth, read/query and command HTTP senders: command/order requests have no retries by default.
 - Raw auth request/response DTOs.
 - Typed `BcsAuthException` for non-success auth responses.
 - Typed `BcsRefreshTokenExpiredException` for locally known expired stored refresh token.
@@ -225,22 +225,29 @@ public sealed class MyApiClient
 
 ## HTTP retries
 
-Auth refresh-token exchange uses a dedicated sender with retries disabled by default. Refresh tokens rotate on
-successful exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed
-first request into a later `400 invalid_grant` and lose the newly issued refresh token.
+The SDK keeps retry policy selection explicit:
 
-Regular API requests use the API retry sender. It retries `HttpRequestException`, timeout exceptions, HTTP `408`,
-HTTP `429`, and HTTP `5xx` responses. Client/auth errors such as `400 invalid_grant` are not retried.
+- Auth refresh-token exchange uses a dedicated sender with retries disabled by default. Refresh tokens rotate on
+  successful exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed
+  first request into a later `400 invalid_grant` and lose the newly issued refresh token.
+- Read/query requests use the read sender. This covers GET endpoints such as limits, portfolio, instruments and
+  candles, plus POST endpoints that are documented as idempotent read queries, such as instruments by tickers/ISINs.
+- Command requests use the command sender and are not retried by default. This covers order create/change/cancel and
+  any future non-idempotent trading operation.
+
+Read/query retries handle `HttpRequestException`, timeout exceptions, HTTP `408`, HTTP `429`, and HTTP `5xx` responses.
+Client/auth errors such as `400 invalid_grant` are not retried.
 
 Defaults:
 
 - `AuthRetryAttempts = 0`
 - `HttpRetryAttempts = 3`
 - `HttpRetryBaseDelay = 250ms`
-- API exponential delays: 250ms, 500ms, 1000ms
+- read/query exponential delays: 250ms, 500ms, 1000ms
 
-Set `HttpRetryAttempts = 0` to disable API retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`. Keep
-`AuthRetryAttempts = 0` unless the caller has an external guarantee that retrying the refresh-token exchange is safe.
+Set `HttpRetryAttempts = 0` to disable read/query retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`.
+Keep `AuthRetryAttempts = 0` unless the caller has an external guarantee that retrying the refresh-token exchange is
+safe. Command/order retries must be opt-in at the client operation level, not inherited from the shared HTTP layer.
 
 ## Error handling
 

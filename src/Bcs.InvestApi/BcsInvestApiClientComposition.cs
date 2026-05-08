@@ -43,7 +43,7 @@ internal static class BcsInvestApiClientComposition
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
-        BcsAuthRequestSender requestSender)
+        IBcsAuthHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -65,7 +65,7 @@ internal static class BcsInvestApiClientComposition
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
-        BcsAuthRequestSender requestSender)
+        IBcsAuthHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -82,20 +82,20 @@ internal static class BcsInvestApiClientComposition
         return new BcsAuthRequestSender(settings);
     }
 
-    public static BcsApiRequestSender CreateApiRequestSender(BcsInvestApiSettings settings)
+    public static IBcsReadHttpSender CreateReadHttpSender(BcsInvestApiSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
-        return new BcsApiRequestSender(settings);
+        return new BcsReadHttpSender(settings);
     }
 
-    public static BcsHttpRequestSender CreateHttpRequestSender(BcsInvestApiSettings settings)
+    public static IBcsCommandHttpSender CreateCommandHttpSender(BcsInvestApiSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
-        return new BcsHttpRequestSender(settings);
+        return new BcsCommandHttpSender(settings);
     }
 
     public static BcsTokenManager CreateTokenManager(

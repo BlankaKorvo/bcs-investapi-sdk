@@ -6,11 +6,6 @@ internal sealed class BcsHttpRequestSender
 {
     private readonly IAsyncPolicy<BcsHttpExchange> _retryPolicy;
 
-    public BcsHttpRequestSender(BcsInvestApiSettings settings)
-        : this(BcsHttpRetryPolicy.CreateForApi(settings))
-    {
-    }
-
     internal BcsHttpRequestSender(IAsyncPolicy<BcsHttpExchange> retryPolicy)
     {
         _retryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
