@@ -1,0 +1,58 @@
+namespace Bcs.InvestApi.Tokens;
+
+using Bcs.InvestApi.Time;
+
+internal static class BcsTokenSourcePreflight
+{
+    private const string MissingStartupTokenSourceMessage =
+        "BCS refresh token is not configured and token storage does not contain saved tokens.";
+
+    public static void EnsureStartupTokenSource(
+        BcsInvestApiSettings settings,
+        IBcsTokenStore tokenStore,
+        IBcsClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(tokenStore);
+        ArgumentNullException.ThrowIfNull(clock);
+
+        BcsTokenSet? storedTokenSet;
+        try
+        {
+            storedTokenSet = tokenStore.LoadAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "BCS saved token storage could not be loaded. Ensure the token file contains a valid BcsTokenSet JSON payload.",
+                ex);
+        }
+
+        if (storedTokenSet is null)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(MissingStartupTokenSourceMessage);
+        }
+
+        EnsureStoredRefreshTokenIsUsable(storedTokenSet, clock.UtcNow);
+    }
+
+    private static void EnsureStoredRefreshTokenIsUsable(BcsTokenSet tokenSet, DateTimeOffset nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(tokenSet.RefreshToken))
+        {
+            throw new InvalidOperationException(
+                "BCS saved token storage contains an empty refresh token.");
+        }
+
+        if (tokenSet.RefreshTokenExpiresAtUtc <= nowUtc)
+        {
+            throw new InvalidOperationException(
+                $"BCS saved refresh token is expired. RefreshTokenExpiresAtUtc='{tokenSet.RefreshTokenExpiresAtUtc:O}'.");
+        }
+    }
+}
