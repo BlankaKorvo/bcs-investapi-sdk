@@ -276,10 +276,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         try
         {
             // After auth succeeds, cancellation must not interrupt persistence of a rotated refresh token.
-            using var persistenceTimeoutCts = new CancellationTokenSource(_settings.TokenPersistenceTimeout);
-            using var persistenceCts = CancellationTokenSource.CreateLinkedTokenSource(
-                refreshOperationCts.Token,
-                persistenceTimeoutCts.Token);
+            using var persistenceCts = new CancellationTokenSource(_settings.TokenPersistenceTimeout);
             await SaveTokenSetForRefreshAsync(tokenSet, persistenceCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)

@@ -19,7 +19,14 @@ internal static class BcsTokenSourcePreflight
         BcsTokenSet? storedTokenSet;
         try
         {
-            storedTokenSet = tokenStore.LoadAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+            using var cts = new CancellationTokenSource(settings.TokenStoreLockTimeout);
+            storedTokenSet = tokenStore.LoadAsync(cts.Token).AsTask().GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new InvalidOperationException(
+                $"BCS saved token storage could not be loaded within token store lock timeout ({settings.TokenStoreLockTimeout}). Ensure no other process holds the token storage lock.",
+                ex);
         }
         catch (Exception ex)
         {

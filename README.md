@@ -131,6 +131,7 @@ await using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettin
     ClientId = BcsAuthClientIds.TradeApiRead,
     TokenStoragePath = @"C:\secure\bcs\tokens.json",
     TokenRefreshSkew = TimeSpan.FromMinutes(5),
+    TokenStoreLockTimeout = TimeSpan.FromSeconds(10),
     AutoRefreshInterval = TimeSpan.FromMinutes(1),
 });
 

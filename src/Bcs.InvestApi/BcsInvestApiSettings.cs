@@ -64,8 +64,8 @@ public sealed class BcsInvestApiSettings
     public TimeSpan AutoRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// Maximum total time allowed for one refresh-token exchange and token persistence transaction once refresh starts.
-    /// Caller cancellation is intentionally ignored during this operation so a rotated refresh token is not lost.
+    /// Maximum time allowed for one refresh-token auth exchange once refresh starts.
+    /// Token persistence after successful auth uses TokenPersistenceTimeout.
     /// Default: 60 seconds.
     /// </summary>
     public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
@@ -76,6 +76,12 @@ public sealed class BcsInvestApiSettings
     /// Default: 30 seconds.
     /// </summary>
     public TimeSpan TokenPersistenceTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Maximum time allowed to acquire token storage lock during startup token source preflight.
+    /// Default: 10 seconds.
+    /// </summary>
+    public TimeSpan TokenStoreLockTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Optional JSON file path for storing access_token and refresh_token.
@@ -145,6 +151,11 @@ public sealed class BcsInvestApiSettings
         if (TokenPersistenceTimeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("BCS token persistence timeout must be greater than zero.");
+        }
+
+        if (TokenStoreLockTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("BCS token store lock timeout must be greater than zero.");
         }
     }
 

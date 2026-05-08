@@ -60,4 +60,20 @@ public sealed class BcsFileTokenStoreTests
         Assert.Equal(tokenSet.AccessTokenExpiresAtUtc, loaded.AccessTokenExpiresAtUtc);
         Assert.Equal(tokenSet.RefreshTokenExpiresAtUtc, loaded.RefreshTokenExpiresAtUtc);
     }
+
+    [Fact]
+    public void IsLockContention_WhenSharingOrLockViolation_ReturnsTrue()
+    {
+        Assert.True(BcsFileTokenRefreshCoordinator.IsLockContention(CreateWin32IOException(32)));
+        Assert.True(BcsFileTokenRefreshCoordinator.IsLockContention(CreateWin32IOException(33)));
+    }
+
+    [Fact]
+    public void IsLockContention_WhenPermanentIoError_ReturnsFalse()
+    {
+        Assert.False(BcsFileTokenRefreshCoordinator.IsLockContention(CreateWin32IOException(5)));
+    }
+
+    private static IOException CreateWin32IOException(int errorCode) =>
+        new("Test IO exception.", unchecked((int)0x80070000) | errorCode);
 }

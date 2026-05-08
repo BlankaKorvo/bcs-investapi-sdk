@@ -227,6 +227,44 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenRefreshOperationTimeoutExpiresDuringPersistence_SavesRotatedTokenPair()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "rotated-refresh-secret"))));
+        var store = new ControlledSaveTokenStore();
+        var manager = CreateManager(
+            handler,
+            store,
+            clock,
+            refreshToken: "initial-refresh-secret",
+            tokenPersistenceTimeout: TimeSpan.FromSeconds(5),
+            tokenRefreshOperationTimeout: TimeSpan.FromMilliseconds(50));
+
+        var refreshTask = manager.RefreshAsync().AsTask();
+        await store.SaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+            Assert.False(store.SaveCancellationObserved);
+        }
+        finally
+        {
+            store.ReleaseSave();
+        }
+
+        var tokenSet = await refreshTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var stored = await store.LoadAsync();
+
+        Assert.Equal("access-1", tokenSet.AccessToken);
+        Assert.Equal("rotated-refresh-secret", tokenSet.RefreshToken);
+        Assert.Equal("rotated-refresh-secret", stored?.RefreshToken);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.True(store.SaveAttempted);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenCallerCancelsAfterAuthRequestStarted_SavesRotatedTokenPair()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -529,6 +567,49 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task Constructor_WhenStartupPreflightLoadDoesNotComplete_UsesTokenStoreLockTimeout()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
+        var store = new CancellableHangingLoadTokenStore();
+
+        var constructionTask = Task.Run(() => CreateManager(
+            handler,
+            store,
+            clock,
+            refreshToken: "refresh-1",
+            tokenStoreLockTimeout: TimeSpan.FromMilliseconds(50)));
+
+        var completed = await Task.WhenAny(constructionTask, Task.Delay(TimeSpan.FromSeconds(5))) == constructionTask;
+        if (!completed)
+        {
+            store.Release();
+            throw new TimeoutException("BcsTokenManager construction did not honor TokenStoreLockTimeout.");
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => constructionTask);
+
+        Assert.Contains("token store lock timeout", exception.Message);
+        Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
+        Assert.True(store.LoadCancellationObserved);
+    }
+
+    [Fact]
+    public void CreateFactory_WhenTokenStoreLockTimeoutIsZero_ThrowsAtCreate()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
+            {
+                RefreshToken = "refresh-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                AuthUrl = new Uri("https://example.test/token"),
+                TokenStoreLockTimeout = TimeSpan.Zero,
+            }));
+
+        Assert.Contains("token store lock timeout must be greater than zero", exception.Message);
+    }
+
+    [Fact]
     public async Task GetTokenManagerFromDi_WhenSavedFileExistsWithoutRefreshToken_UsesStoredToken()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -734,7 +815,8 @@ public sealed class BcsTokenManagerTests
         FakeBcsClock clock,
         string refreshToken,
         TimeSpan? tokenPersistenceTimeout = null,
-        TimeSpan? tokenRefreshOperationTimeout = null)
+        TimeSpan? tokenRefreshOperationTimeout = null,
+        TimeSpan? tokenStoreLockTimeout = null)
     {
         var settings = new BcsInvestApiSettings
         {
@@ -745,6 +827,7 @@ public sealed class BcsTokenManagerTests
             AutoRefreshInterval = TimeSpan.FromMilliseconds(50),
             TokenRefreshOperationTimeout = tokenRefreshOperationTimeout ?? TimeSpan.FromSeconds(60),
             TokenPersistenceTimeout = tokenPersistenceTimeout ?? TimeSpan.FromSeconds(30),
+            TokenStoreLockTimeout = tokenStoreLockTimeout ?? TimeSpan.FromSeconds(10),
         };
 
         var auth = new BcsAuthService(new HttpClient(handler), settings);
@@ -845,6 +928,69 @@ public sealed class BcsTokenManagerTests
                 throw;
             }
         }
+    }
+
+    private sealed class ControlledSaveTokenStore : IBcsTokenStore
+    {
+        private readonly TaskCompletionSource _releaseSave =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private BcsTokenSet? _tokenSet;
+
+        public TaskCompletionSource SaveStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool SaveAttempted { get; private set; }
+
+        public bool SaveCancellationObserved { get; private set; }
+
+        public void ReleaseSave() => _releaseSave.TrySetResult();
+
+        public ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_tokenSet);
+
+        public async ValueTask SaveAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken = default)
+        {
+            SaveAttempted = true;
+            SaveStarted.TrySetResult();
+
+            try
+            {
+                await _releaseSave.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                SaveCancellationObserved = true;
+                throw;
+            }
+
+            _tokenSet = tokenSet;
+        }
+    }
+
+    private sealed class CancellableHangingLoadTokenStore : IBcsTokenStore
+    {
+        private readonly TaskCompletionSource<BcsTokenSet?> _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool LoadCancellationObserved { get; private set; }
+
+        public void Release() => _release.TrySetResult(null);
+
+        public async ValueTask<BcsTokenSet?> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                LoadCancellationObserved = true;
+                throw;
+            }
+        }
+
+        public ValueTask SaveAsync(BcsTokenSet tokenSet, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
     }
 
     private sealed class NonReentrantCoordinatedTokenStore : IBcsTokenStore, IBcsTokenRefreshCoordinator

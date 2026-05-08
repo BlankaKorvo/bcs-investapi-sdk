@@ -4,6 +4,9 @@ using System.Collections.Concurrent;
 
 internal sealed class BcsFileTokenRefreshCoordinator : IBcsTokenRefreshCoordinator
 {
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
+    private const int ErrorCodeMask = 0xFFFF;
     private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
@@ -82,10 +85,18 @@ internal sealed class BcsFileTokenRefreshCoordinator : IBcsTokenRefreshCoordinat
                         Options = FileOptions.Asynchronous,
                     });
             }
-            catch (IOException) when (!cancellationToken.IsCancellationRequested)
+            catch (IOException ex) when (!cancellationToken.IsCancellationRequested && IsLockContention(ex))
             {
                 await Task.Delay(LockRetryDelay, cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    internal static bool IsLockContention(IOException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var errorCode = exception.HResult & ErrorCodeMask;
+        return errorCode is ErrorSharingViolation or ErrorLockViolation;
     }
 }
