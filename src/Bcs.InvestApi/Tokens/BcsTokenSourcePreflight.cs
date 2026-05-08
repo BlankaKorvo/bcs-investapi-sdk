@@ -7,10 +7,11 @@ internal static class BcsTokenSourcePreflight
     private const string MissingStartupTokenSourceMessage =
         "BCS refresh token is not configured and token storage does not contain saved tokens.";
 
-    public static void EnsureStartupTokenSource(
+    public static async ValueTask EnsureStartupTokenSourceAsync(
         BcsInvestApiSettings settings,
         IBcsTokenStore tokenStore,
-        IBcsClock clock)
+        IBcsClock clock,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(tokenStore);
@@ -19,8 +20,13 @@ internal static class BcsTokenSourcePreflight
         BcsTokenSet? storedTokenSet;
         try
         {
-            using var cts = new CancellationTokenSource(settings.TokenStoreLockTimeout);
-            storedTokenSet = tokenStore.LoadAsync(cts.Token).AsTask().GetAwaiter().GetResult();
+            using var timeoutCts = new CancellationTokenSource(settings.TokenStoreLockTimeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            storedTokenSet = await tokenStore.LoadAsync(linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (OperationCanceledException ex)
         {

@@ -17,9 +17,11 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     private readonly IBcsTokenRefreshCoordinator? _tokenRefreshCoordinator;
     private readonly bool _useCoordinatedTokenStoreOperations;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly SemaphoreSlim _startupPreflightGate = new(1, 1);
     private readonly object _autoRefreshGate = new();
     private CancellationTokenSource? _autoRefreshCts;
     private Task? _autoRefreshTask;
+    private bool _startupPreflightCompleted;
     private bool _disposed;
 
     public BcsTokenManager(
@@ -69,7 +71,6 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
             ReferenceEquals(_tokenRefreshCoordinator, implicitCoordinator);
 
         _settings.ValidateTokenSettings();
-        BcsTokenSourcePreflight.EnsureStartupTokenSource(_settings, _tokenStore, _clock);
     }
 
     public event EventHandler<BcsTokenRefreshFailedEventArgs>? AutoRefreshFailed;
@@ -84,6 +85,40 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
             {
                 return _autoRefreshTask is not null && !_autoRefreshTask.IsCompleted;
             }
+        }
+    }
+
+    /// <summary>
+    /// Explicitly validates that startup token source is available without doing I/O in the constructor.
+    /// </summary>
+    public async ValueTask InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (Volatile.Read(ref _startupPreflightCompleted))
+        {
+            return;
+        }
+
+        await _startupPreflightGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _startupPreflightCompleted))
+            {
+                return;
+            }
+
+            await BcsTokenSourcePreflight.EnsureStartupTokenSourceAsync(
+                _settings,
+                _tokenStore,
+                _clock,
+                cancellationToken).ConfigureAwait(false);
+
+            Volatile.Write(ref _startupPreflightCompleted, true);
+        }
+        finally
+        {
+            _startupPreflightGate.Release();
         }
     }
 
@@ -162,6 +197,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
         _disposed = true;
         _refreshGate.Dispose();
+        _startupPreflightGate.Dispose();
     }
 
     public async ValueTask DisposeAsync()
@@ -175,6 +211,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
         _disposed = true;
         _refreshGate.Dispose();
+        _startupPreflightGate.Dispose();
     }
 
     private async Task RunAutoRefreshAsync(CancellationToken cancellationToken)
