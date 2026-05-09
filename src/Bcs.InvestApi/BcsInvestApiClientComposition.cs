@@ -2,6 +2,7 @@ namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 
@@ -86,6 +87,30 @@ internal static class BcsInvestApiClientComposition
         settings.ValidateTransportSettings();
 
         return new BcsCommandHttpSender(settings);
+    }
+
+    public static BcsLimitsService CreateLimitsService(
+        HttpClient httpClient,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsLimitsService(httpClient, tokens, requestSender);
+    }
+
+    public static BcsLimitsService CreateLimitsService(
+        Func<HttpClient> httpClientFactory,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsLimitsService(httpClientFactory, tokens, requestSender);
     }
 
     public static BcsTokenManager CreateTokenManager(

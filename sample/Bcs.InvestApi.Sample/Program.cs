@@ -18,6 +18,12 @@ client.Tokens.StartAutoRefresh();
 Console.WriteLine($"AccessToken: {MaskToken(accessToken)}");
 Console.WriteLine($"AutoRefreshRunning: {client.Tokens.IsAutoRefreshRunning}");
 
+var limits = await client.GetLimitsAsync();
+Console.WriteLine($"Depo limits: {limits.DepoLimit.Count}");
+Console.WriteLine($"Future holdings: {limits.FutureHolding.Count}");
+Console.WriteLine($"Money limits: {limits.MoneyLimits.Count}");
+Console.WriteLine($"Futures limits: {limits.FuturesLimits.Count}");
+
 await client.Tokens.StopAutoRefreshAsync();
 
 return 0;

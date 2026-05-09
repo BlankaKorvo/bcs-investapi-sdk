@@ -44,10 +44,15 @@ public static class BcsInvestApiClientFactory
             auth,
             settings,
             clock);
+        var limits = BcsInvestApiClientComposition.CreateLimitsService(
+            httpClient,
+            tokens,
+            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
 
         return new BcsInvestApiClient(
             auth,
             tokens,
+            limits,
             ownsTokenManager: true,
             ownedTransport: httpClient);
     }

@@ -1,6 +1,7 @@
 namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Tokens;
 
 /// <summary>
@@ -9,23 +10,26 @@ using Bcs.InvestApi.Tokens;
 /// </summary>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
+    private readonly BcsLimitsService _limits;
     private readonly bool _ownsTokenManager;
     private readonly IDisposable? _ownedTransport;
     private bool _disposed;
 
-    internal BcsInvestApiClient(BcsAuthService auth, BcsTokenManager tokens)
-        : this(auth, tokens, ownsTokenManager: false, ownedTransport: null)
+    internal BcsInvestApiClient(BcsAuthService auth, BcsTokenManager tokens, BcsLimitsService limits)
+        : this(auth, tokens, limits, ownsTokenManager: false, ownedTransport: null)
     {
     }
 
     internal BcsInvestApiClient(
         BcsAuthService auth,
         BcsTokenManager tokens,
+        BcsLimitsService limits,
         bool ownsTokenManager,
         IDisposable? ownedTransport)
     {
         Auth = auth ?? throw new ArgumentNullException(nameof(auth));
         Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        _limits = limits ?? throw new ArgumentNullException(nameof(limits));
         _ownsTokenManager = ownsTokenManager;
         _ownedTransport = ownedTransport;
     }
@@ -33,6 +37,12 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     internal BcsAuthService Auth { get; }
 
     public BcsTokenManager Tokens { get; }
+
+    public Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _limits.GetLimitsAsync(cancellationToken);
+    }
 
     public void Dispose()
     {
