@@ -14,7 +14,6 @@ public sealed class BcsApiExceptionTests
 {
     private static readonly Uri AuthUrl = new("https://example.test/token");
     private static readonly Uri LimitsUrl = new("https://example.test/trade-api-bff-limit/api/v1/limits");
-    private static readonly Uri PortfolioUrl = new("https://example.test/trade-api-bff-portfolio/api/v1/portfolio");
 
     [Fact]
     public async Task GetLimitsAsync_ErrorStatus_ThrowsBcsApiExceptionWithResponseBody()
@@ -45,56 +44,7 @@ public sealed class BcsApiExceptionTests
     }
 
     [Fact]
-    public async Task GetLimitsAsync_UnauthorizedOnce_ForcesRefreshAndRetriesReadRequest()
-    {
-        const string limitsJson = """
-        {
-          "depoLimit": [],
-          "futureHolding": [],
-          "moneyLimits": [],
-          "futuresLimits": []
-        }
-        """;
-
-        var settings = CreateSettings();
-        var authRequestCount = 0;
-        var limitAccessTokens = new List<string?>();
-        var handler = new CapturingHttpMessageHandler((request, _) =>
-        {
-            if (request.RequestUri == AuthUrl)
-            {
-                authRequestCount++;
-                return Task.FromResult(JsonResponse(
-                    HttpStatusCode.OK,
-                    AuthResponseJson($"access-{authRequestCount}", $"refresh-{authRequestCount + 1}")));
-            }
-
-            if (request.RequestUri == LimitsUrl)
-            {
-                limitAccessTokens.Add(request.Headers.Authorization?.Parameter);
-
-                return Task.FromResult(limitAccessTokens.Count == 1
-                    ? JsonResponse(HttpStatusCode.Unauthorized, """{"error":"token_expired"}""")
-                    : JsonResponse(HttpStatusCode.OK, limitsJson));
-            }
-
-            throw new InvalidOperationException($"Unexpected request URI '{request.RequestUri}'.");
-        });
-
-        using var httpClient = new HttpClient(handler);
-        await using var tokens = CreateTokenManager(settings, httpClient);
-        var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender(settings));
-
-        var limits = await service.GetLimitsAsync();
-
-        Assert.Empty(limits.DepoLimit);
-        Assert.Equal(new[] { "access-1", "access-2" }, limitAccessTokens);
-        Assert.Equal(2, authRequestCount);
-        Assert.Equal(4, handler.RequestCount);
-    }
-
-    [Fact]
-    public async Task GetLimitsAsync_UnauthorizedTwice_ThrowsBcsApiExceptionAfterSingleRefresh()
+    public async Task GetLimitsAsync_Unauthorized_ThrowsBcsApiExceptionAfterSingleApiRequest()
     {
         const string unauthorizedJson = """{"error":"token_expired"}""";
 
@@ -122,67 +72,16 @@ public sealed class BcsApiExceptionTests
 
         using var httpClient = new HttpClient(handler);
         await using var tokens = CreateTokenManager(settings, httpClient);
-        var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender(settings));
+        var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
 
         Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
         Assert.Equal(unauthorizedJson, exception.ResponseBody);
         Assert.Equal("limits", exception.Endpoint);
-        Assert.Equal(new[] { "access-1", "access-2" }, limitAccessTokens);
-        Assert.Equal(2, authRequestCount);
-        Assert.Equal(4, handler.RequestCount);
-    }
-
-    [Fact]
-    public async Task GetPortfolioAsync_UnauthorizedOnce_ForcesRefreshAndRetriesReadRequest()
-    {
-        const string portfolioJson = """
-        [
-          {
-            "ticker": "SBER",
-            "quantity": 1
-          }
-        ]
-        """;
-
-        var settings = CreateSettings();
-        var authRequestCount = 0;
-        var portfolioAccessTokens = new List<string?>();
-        var handler = new CapturingHttpMessageHandler((request, _) =>
-        {
-            if (request.RequestUri == AuthUrl)
-            {
-                authRequestCount++;
-                return Task.FromResult(JsonResponse(
-                    HttpStatusCode.OK,
-                    AuthResponseJson($"access-{authRequestCount}", $"refresh-{authRequestCount + 1}")));
-            }
-
-            if (request.RequestUri == PortfolioUrl)
-            {
-                portfolioAccessTokens.Add(request.Headers.Authorization?.Parameter);
-
-                return Task.FromResult(portfolioAccessTokens.Count == 1
-                    ? JsonResponse(HttpStatusCode.Unauthorized, """{"error":"token_expired"}""")
-                    : JsonResponse(HttpStatusCode.OK, portfolioJson));
-            }
-
-            throw new InvalidOperationException($"Unexpected request URI '{request.RequestUri}'.");
-        });
-
-        using var httpClient = new HttpClient(handler);
-        await using var tokens = CreateTokenManager(settings, httpClient);
-        var service = new BcsPortfolioService(settings, httpClient, tokens, CreateReadSender(settings));
-
-        var portfolio = await service.GetPortfolioAsync();
-
-        var position = Assert.Single(portfolio);
-        Assert.Equal("SBER", position.Ticker);
-        Assert.Equal(1m, position.Quantity);
-        Assert.Equal(new[] { "access-1", "access-2" }, portfolioAccessTokens);
-        Assert.Equal(2, authRequestCount);
-        Assert.Equal(4, handler.RequestCount);
+        Assert.Equal(new[] { "access-1" }, limitAccessTokens);
+        Assert.Equal(1, authRequestCount);
+        Assert.Equal(2, handler.RequestCount);
     }
 
     [Fact]
@@ -243,11 +142,8 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(1, handler.RequestCount);
     }
 
-    private static BcsReadHttpSender CreateReadSender() =>
-        new(CreateSettings());
-
-    private static BcsReadHttpSender CreateReadSender(BcsInvestApiSettings settings) =>
-        new(settings);
+    private static IBcsHttpSender CreateReadSender() =>
+        new BcsHttpRequestSender();
 
     private static BcsInvestApiSettings CreateSettings() =>
         new()
@@ -256,7 +152,6 @@ public sealed class BcsApiExceptionTests
             ClientId = BcsAuthClientIds.TradeApiRead,
             AuthUrl = AuthUrl,
             BaseUrl = new Uri("https://example.test"),
-            HttpRetryAttempts = 0,
         };
 
     private static BcsTokenManager CreateTokenManager(

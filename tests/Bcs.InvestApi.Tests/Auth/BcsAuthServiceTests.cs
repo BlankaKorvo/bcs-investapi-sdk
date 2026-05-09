@@ -93,7 +93,7 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_TransientServerError_DoesNotRetryByDefault()
+    public async Task GetAccessTokenAsync_ServerError_ThrowsAuthExceptionAfterSingleRequest()
     {
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.InternalServerError, """{"error":"temporary"}""")));
@@ -112,35 +112,11 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_TransientHttpException_DoesNotRetryByDefault()
+    public async Task GetAccessTokenAsync_HttpException_PropagatesAfterSingleRequest()
     {
         var handler = new CapturingHttpMessageHandler((_, _) =>
             throw new HttpRequestException("Temporary network failure."));
         var service = CreateService(handler);
-
-        await Assert.ThrowsAsync<HttpRequestException>(() =>
-            service.GetAccessTokenAsync(new BcsAuthRequest
-            {
-                RefreshToken = "refresh-token-1",
-                ClientId = BcsAuthClientIds.TradeApiRead,
-                GrantType = BcsGrantTypes.RefreshToken
-            }));
-
-        Assert.Equal(1, handler.RequestCount);
-    }
-
-    [Fact]
-    public async Task GetAccessTokenAsync_WhenHttpRetriesConfigured_DoesNotRetryRefreshTokenExchange()
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            throw new HttpRequestException("Connection reset after processing."));
-        var service = CreateService(
-            handler,
-            configureSettings: settings =>
-            {
-                settings.HttpRetryAttempts = 3;
-                settings.HttpRetryBaseDelay = TimeSpan.Zero;
-            });
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
             service.GetAccessTokenAsync(new BcsAuthRequest

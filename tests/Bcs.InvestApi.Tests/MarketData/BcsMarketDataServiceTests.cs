@@ -39,7 +39,7 @@ public sealed class BcsMarketDataServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var candles = await service.GetCandlesAsync(
             " TQBR ",
@@ -131,7 +131,7 @@ public sealed class BcsMarketDataServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             service.GetCandlesAsync(
@@ -153,7 +153,7 @@ public sealed class BcsMarketDataServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
         var startDate = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
@@ -173,13 +173,12 @@ public sealed class BcsMarketDataServiceTests
             new HttpClient(new CapturingHttpMessageHandler((_, _) =>
                 Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")))),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
     private static BcsInvestApiSettings CreateSettings() =>
         new()
         {
             BaseUrl = new Uri("https://example.test"),
-            HttpRetryAttempts = 0,
         };
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

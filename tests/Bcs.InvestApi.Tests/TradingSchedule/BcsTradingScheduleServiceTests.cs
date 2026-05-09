@@ -33,7 +33,7 @@ public sealed class BcsTradingScheduleServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var schedule = await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
 
@@ -67,7 +67,7 @@ public sealed class BcsTradingScheduleServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var schedule = await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
 
@@ -96,7 +96,7 @@ public sealed class BcsTradingScheduleServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
             service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
@@ -120,7 +120,7 @@ public sealed class BcsTradingScheduleServiceTests
             new HttpClient(new CapturingHttpMessageHandler((_, _) =>
                 Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")))),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.GetDailyTradingScheduleAsync(classCode, ticker));
@@ -130,7 +130,6 @@ public sealed class BcsTradingScheduleServiceTests
         new()
         {
             BaseUrl = new Uri("https://example.test"),
-            HttpRetryAttempts = 0,
         };
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

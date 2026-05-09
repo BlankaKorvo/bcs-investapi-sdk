@@ -40,18 +40,6 @@ public sealed class BcsInvestApiSettings
     public TimeSpan? Timeout { get; set; }
 
     /// <summary>
-    /// Maximum number of HTTP retry attempts for idempotent read/query API requests after the initial request.
-    /// Default: 3. Set to 0 to disable read/query retries.
-    /// </summary>
-    public int HttpRetryAttempts { get; set; } = 3;
-
-    /// <summary>
-    /// Base delay for exponential HTTP retry backoff.
-    /// Default: 250 milliseconds.
-    /// </summary>
-    public TimeSpan HttpRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(250);
-
-    /// <summary>
     /// Refresh access token before its actual expiration.
     /// Default: 5 minutes.
     /// </summary>
@@ -95,15 +83,6 @@ public sealed class BcsInvestApiSettings
             throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
         }
 
-        if (HttpRetryAttempts < 0)
-        {
-            throw new InvalidOperationException("BCS HTTP retry attempts must be greater than or equal to zero.");
-        }
-
-        if (HttpRetryBaseDelay < TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS HTTP retry base delay must be greater than or equal to zero.");
-        }
     }
 
     internal void ValidateTokenSettings()

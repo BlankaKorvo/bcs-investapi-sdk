@@ -38,7 +38,7 @@ public static class BcsInvestApiClientFactory
 
         BcsInvestApiClientComposition.ConfigureAuthHttpClient(settings, httpClient);
 
-        var requestSender = BcsInvestApiClientComposition.CreateAuthRequestSender(settings);
+        var requestSender = BcsInvestApiClientComposition.CreateHttpRequestSender();
         var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient, requestSender);
         var tokens = BcsInvestApiClientComposition.CreateTokenManager(
             auth,
@@ -48,27 +48,27 @@ public static class BcsInvestApiClientFactory
             settings,
             httpClient,
             tokens,
-            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+            requestSender);
         var portfolio = BcsInvestApiClientComposition.CreatePortfolioService(
             settings,
             httpClient,
             tokens,
-            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+            requestSender);
         var tradingSchedule = BcsInvestApiClientComposition.CreateTradingScheduleService(
             settings,
             httpClient,
             tokens,
-            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+            requestSender);
         var instruments = BcsInvestApiClientComposition.CreateInstrumentsService(
             settings,
             httpClient,
             tokens,
-            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+            requestSender);
         var marketData = BcsInvestApiClientComposition.CreateMarketDataService(
             settings,
             httpClient,
             tokens,
-            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+            requestSender);
 
         return new BcsInvestApiClient(
             auth,

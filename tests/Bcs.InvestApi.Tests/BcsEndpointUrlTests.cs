@@ -23,7 +23,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetLimitsAsync();
 
@@ -43,7 +43,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetPortfolioAsync();
 
@@ -63,7 +63,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
 
@@ -83,7 +83,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetInstrumentsByIsinsPageAsync(new[] { "RU0007661625" }, page: 2, size: 50);
 
@@ -104,7 +104,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetInstrumentsByTickersPageAsync(new[] { "SBER" }, page: 2, size: 50);
 
@@ -125,7 +125,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetInstrumentsByTypePageAsync(
             BcsInstrumentTypes.Options,
@@ -150,7 +150,7 @@ public sealed class BcsEndpointUrlTests
             settings,
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(settings));
+            new BcsHttpRequestSender());
 
         await service.GetCandlesAsync(
             "TQBR",
@@ -193,7 +193,6 @@ public sealed class BcsEndpointUrlTests
         new()
         {
             BaseUrl = baseUrl,
-            HttpRetryAttempts = 0,
         };
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

@@ -1,16 +1,7 @@
 namespace Bcs.InvestApi.Infrastructure;
 
-using Polly;
-
-internal sealed class BcsHttpRequestSender
+internal sealed class BcsHttpRequestSender : IBcsHttpSender
 {
-    private readonly IAsyncPolicy<BcsHttpExchange> _retryPolicy;
-
-    internal BcsHttpRequestSender(IAsyncPolicy<BcsHttpExchange> retryPolicy)
-    {
-        _retryPolicy = retryPolicy ?? throw new ArgumentNullException(nameof(retryPolicy));
-    }
-
     public Task<BcsHttpExchange> SendAsync(
         HttpClient httpClient,
         Func<HttpRequestMessage> requestFactory,
@@ -19,9 +10,7 @@ internal sealed class BcsHttpRequestSender
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(requestFactory);
 
-        return _retryPolicy.ExecuteAsync(
-            ct => SendOnceAsync(httpClient, requestFactory, ct),
-            cancellationToken);
+        return SendOnceAsync(httpClient, requestFactory, cancellationToken);
     }
 
     private static async Task<BcsHttpExchange> SendOnceAsync(

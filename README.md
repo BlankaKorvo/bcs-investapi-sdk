@@ -18,7 +18,6 @@ net10.0
 - Lazy refresh before token expiration.
 - Optional auto-refresh loop.
 - DI integration with singleton `BcsTokenManager`.
-- Retries only for idempotent read/query HTTP calls.
 - `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
 - Typed `BcsAuthException` for non-success auth responses.
 - Typed limits, portfolio, daily trading schedule, instruments-by-ISIN, instruments-by-ticker, instruments-by-type,
@@ -66,8 +65,6 @@ Form fields:
 | `BaseUrl` | `https://be.broker.ru` | Base URL for BCS HTTP API endpoints. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
 | `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP URLs only for explicit local tests. |
 | `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
-| `HttpRetryAttempts` | `3` | Retry attempts for idempotent read/query HTTP calls after the initial request. |
-| `HttpRetryBaseDelay` | `250ms` | Base delay for exponential retry backoff. |
 | `TokenRefreshSkew` | `5 minutes` | Refresh access token before its actual expiration. |
 | `AutoRefreshInterval` | `1 minute` | Timer tick interval for the optional auto-refresh loop. |
 | `TokenRefreshOperationTimeout` | `60 seconds` | Maximum time allowed for one refresh-token auth exchange. |
@@ -81,8 +78,8 @@ Form fields:
 - After successful authorization it updates the in-memory token pair.
 - Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and valid under `TokenRefreshSkew`.
 - If the in-memory refresh token is missing or expires within `TokenRefreshSkew`, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
-- If the in-memory refresh token is rejected with `invalid_grant`, refresh clears the in-memory token pair and retries
-  once with `BcsInvestApiSettings.RefreshToken` when it is a different token.
+- If the in-memory refresh token is rejected with `invalid_grant`, refresh clears the in-memory token pair and falls
+  back once to `BcsInvestApiSettings.RefreshToken` when it is a different token.
 - If `BcsInvestApiSettings.RefreshToken` is rejected with `invalid_grant`, the `BcsAuthException` is propagated.
 - `GetAccessTokenAsync()` returns the in-memory access token while it is valid under `TokenRefreshSkew`.
 - If the access token expires soon, it calls the auth endpoint under a `SemaphoreSlim` refresh gate.
@@ -316,26 +313,6 @@ internal `BcsTokenManager` detail and are not returned from the main facade. Cal
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make the refresh
 token exposure explicit in that API.
-
-## HTTP Retries
-
-The SDK keeps retry policy selection explicit:
-
-- Auth refresh-token exchange uses a dedicated sender with retries disabled. Refresh tokens rotate on successful
-  exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed first
-  request into a later `400 invalid_grant`.
-- Read/query requests use the read sender. This covers GET endpoints such as limits, portfolio, instruments and
-  candles, plus POST endpoints that are documented as idempotent read queries.
-- Command requests use the command sender and are not retried by default.
-
-Defaults:
-
-- `HttpRetryAttempts = 3`
-- `HttpRetryBaseDelay = 250ms`
-- read/query exponential delays: 250ms, 500ms, 1000ms
-
-Auth refresh-token exchange and command/order retries must not be inherited from the shared HTTP layer. If a future
-low-level auth retry API is needed, keep it separate and make the refresh-token rotation risk explicit.
 
 ## Error Handling
 

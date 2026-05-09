@@ -111,7 +111,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByIsinsPageAsync(
             new[] { " RU0007661625 " },
@@ -172,7 +172,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByTickersPageAsync(
             new[] { " SBER " },
@@ -227,7 +227,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByTypePageAsync(
             " stock ",
@@ -258,7 +258,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         await service.GetInstrumentsByTypePageAsync(
             BcsInstrumentTypes.Options,
@@ -291,7 +291,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByIsinsAsync(
             new[] { "RU0007661625" },
@@ -337,7 +337,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByTickersAsync(
             new[] { "SBER" },
@@ -372,7 +372,7 @@ public sealed class BcsInstrumentsServiceTests
             CreateSettings(),
             new HttpClient(handler),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
         var instruments = await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Stock,
@@ -507,13 +507,12 @@ public sealed class BcsInstrumentsServiceTests
             new HttpClient(new CapturingHttpMessageHandler((_, _) =>
                 Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")))),
             new StaticTokenProvider("access-token-1"),
-            new BcsReadHttpSender(CreateSettings()));
+            new BcsHttpRequestSender());
 
     private static BcsInvestApiSettings CreateSettings() =>
         new()
         {
             BaseUrl = new Uri("https://example.test"),
-            HttpRetryAttempts = 0,
         };
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

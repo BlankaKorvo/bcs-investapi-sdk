@@ -9,7 +9,7 @@ internal sealed class BcsAuthService
 {
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
-    private readonly IBcsAuthHttpSender _requestSender;
+    private readonly IBcsHttpSender _requestSender;
     private readonly BcsInvestApiSettings _settings;
 
     internal BcsAuthService(HttpClient httpClient, IOptions<BcsInvestApiSettings> options)
@@ -30,7 +30,7 @@ internal sealed class BcsAuthService
     internal BcsAuthService(
         HttpClient httpClient,
         BcsInvestApiSettings settings,
-        IBcsAuthHttpSender requestSender)
+        IBcsHttpSender requestSender)
         : this(() => httpClient, settings, disposeHttpClientAfterRequest: false, requestSender)
     {
     }
@@ -38,7 +38,7 @@ internal sealed class BcsAuthService
     internal BcsAuthService(
         Func<HttpClient> httpClientFactory,
         BcsInvestApiSettings settings,
-        IBcsAuthHttpSender requestSender)
+        IBcsHttpSender requestSender)
         : this(httpClientFactory, settings, disposeHttpClientAfterRequest: true, requestSender)
     {
     }
@@ -47,12 +47,12 @@ internal sealed class BcsAuthService
         Func<HttpClient> httpClientFactory,
         BcsInvestApiSettings settings,
         bool disposeHttpClientAfterRequest,
-        IBcsAuthHttpSender? requestSender = null)
+        IBcsHttpSender? requestSender = null)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
-        _requestSender = requestSender ?? new BcsAuthRequestSender(settings);
+        _requestSender = requestSender ?? new BcsHttpRequestSender();
 
         _settings.ValidateTransportSettings();
     }

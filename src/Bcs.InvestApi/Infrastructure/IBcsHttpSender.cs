@@ -7,15 +7,3 @@ internal interface IBcsHttpSender
         Func<HttpRequestMessage> requestFactory,
         CancellationToken cancellationToken);
 }
-
-internal interface IBcsReadHttpSender : IBcsHttpSender
-{
-}
-
-internal interface IBcsCommandHttpSender : IBcsHttpSender
-{
-}
-
-internal interface IBcsAuthHttpSender : IBcsHttpSender
-{
-}

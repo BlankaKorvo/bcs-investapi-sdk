@@ -32,13 +32,13 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        return CreateAuthService(settings, httpClient, CreateAuthRequestSender(settings));
+        return CreateAuthService(settings, httpClient, CreateHttpRequestSender());
     }
 
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
-        IBcsAuthHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -54,13 +54,13 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
 
-        return CreateAuthService(settings, httpClientFactory, CreateAuthRequestSender(settings));
+        return CreateAuthService(settings, httpClientFactory, CreateHttpRequestSender());
     }
 
     public static BcsAuthService CreateAuthService(
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
-        IBcsAuthHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -69,35 +69,14 @@ internal static class BcsInvestApiClientComposition
         return new BcsAuthService(httpClientFactory, settings, requestSender);
     }
 
-    public static BcsAuthRequestSender CreateAuthRequestSender(BcsInvestApiSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
-
-        return new BcsAuthRequestSender(settings);
-    }
-
-    public static IBcsReadHttpSender CreateReadHttpSender(BcsInvestApiSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
-
-        return new BcsReadHttpSender(settings);
-    }
-
-    public static IBcsCommandHttpSender CreateCommandHttpSender(BcsInvestApiSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
-
-        return new BcsCommandHttpSender(settings);
-    }
+    public static IBcsHttpSender CreateHttpRequestSender() =>
+        new BcsHttpRequestSender();
 
     public static BcsLimitsService CreateLimitsService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -111,7 +90,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -125,7 +104,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -139,7 +118,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -153,7 +132,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -167,7 +146,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -181,7 +160,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -195,7 +174,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -209,7 +188,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -223,7 +202,7 @@ internal static class BcsInvestApiClientComposition
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);

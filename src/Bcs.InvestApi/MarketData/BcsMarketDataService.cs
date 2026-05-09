@@ -14,14 +14,14 @@ internal sealed class BcsMarketDataService
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
     private readonly Uri _candlesUrl;
-    private readonly IBcsReadHttpSender _requestSender;
+    private readonly IBcsHttpSender _requestSender;
     private readonly IBcsAccessTokenProvider _tokens;
 
     internal BcsMarketDataService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
         : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
     {
     }
@@ -30,7 +30,7 @@ internal sealed class BcsMarketDataService
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender)
+        IBcsHttpSender requestSender)
         : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
     {
     }
@@ -39,7 +39,7 @@ internal sealed class BcsMarketDataService
         BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
-        IBcsReadHttpSender requestSender,
+        IBcsHttpSender requestSender,
         bool disposeHttpClientAfterRequest)
     {
         ArgumentNullException.ThrowIfNull(settings);

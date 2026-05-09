@@ -48,24 +48,8 @@ public static class BcsInvestApiClientExtensions
     {
         services.AddSingleton<IBcsClock, BcsSystemClock>();
 
-        services.AddSingleton<BcsAuthRequestSender>(sp =>
-        {
-            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            return BcsInvestApiClientComposition.CreateAuthRequestSender(settings);
-        });
-        services.AddSingleton<IBcsAuthHttpSender>(sp => sp.GetRequiredService<BcsAuthRequestSender>());
-
-        services.AddSingleton<IBcsReadHttpSender>(sp =>
-        {
-            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            return BcsInvestApiClientComposition.CreateReadHttpSender(settings);
-        });
-
-        services.AddSingleton<IBcsCommandHttpSender>(sp =>
-        {
-            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
-            return BcsInvestApiClientComposition.CreateCommandHttpSender(settings);
-        });
+        services.AddSingleton<BcsHttpRequestSender>();
+        services.AddSingleton<IBcsHttpSender>(sp => sp.GetRequiredService<BcsHttpRequestSender>());
 
         services.AddHttpClient(BcsInvestApiClientComposition.AuthHttpClientName, (sp, httpClient) =>
         {
@@ -81,7 +65,7 @@ public static class BcsInvestApiClientExtensions
             return BcsInvestApiClientComposition.CreateAuthService(
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
-                sp.GetRequiredService<IBcsAuthHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
 
         services.AddSingleton<BcsTokenManager>(sp =>
@@ -103,7 +87,7 @@ public static class BcsInvestApiClientExtensions
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                sp.GetRequiredService<IBcsReadHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp =>
         {
@@ -114,7 +98,7 @@ public static class BcsInvestApiClientExtensions
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                sp.GetRequiredService<IBcsReadHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp =>
         {
@@ -125,7 +109,7 @@ public static class BcsInvestApiClientExtensions
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                sp.GetRequiredService<IBcsReadHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp =>
         {
@@ -136,7 +120,7 @@ public static class BcsInvestApiClientExtensions
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                sp.GetRequiredService<IBcsReadHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp =>
         {
@@ -147,7 +131,7 @@ public static class BcsInvestApiClientExtensions
                 settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                sp.GetRequiredService<IBcsReadHttpSender>());
+                sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp => new BcsInvestApiClient(
             sp.GetRequiredService<BcsAuthService>(),
