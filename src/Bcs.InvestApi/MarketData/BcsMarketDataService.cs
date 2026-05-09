@@ -1,0 +1,227 @@
+namespace Bcs.InvestApi.MarketData;
+
+using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Tokens;
+
+internal sealed class BcsMarketDataService
+{
+    private const string CandlesPath = "trade-api-market-data-connector/api/v1/candles-chart";
+    private const int MaxCandlesPerRequest = 1440;
+
+    private readonly Func<HttpClient> _httpClientFactory;
+    private readonly bool _disposeHttpClientAfterRequest;
+    private readonly Uri _candlesUrl;
+    private readonly IBcsReadHttpSender _requestSender;
+    private readonly IBcsAccessTokenProvider _tokens;
+
+    internal BcsMarketDataService(
+        BcsInvestApiSettings settings,
+        HttpClient httpClient,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+        : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
+    {
+    }
+
+    internal BcsMarketDataService(
+        BcsInvestApiSettings settings,
+        Func<HttpClient> httpClientFactory,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+        : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
+    {
+    }
+
+    private BcsMarketDataService(
+        BcsInvestApiSettings settings,
+        Func<HttpClient> httpClientFactory,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender,
+        bool disposeHttpClientAfterRequest)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        _requestSender = requestSender ?? throw new ArgumentNullException(nameof(requestSender));
+        _candlesUrl = settings.CreateEndpointUrl(CandlesPath);
+        _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
+    }
+
+    internal async Task<BcsCandlesResponse> GetCandlesAsync(
+        string classCode,
+        string ticker,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        string timeFrame,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(classCode);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        var normalizedTimeFrame = NormalizeTimeFrame(timeFrame);
+        ValidateDateRange(startDate, endDate, normalizedTimeFrame);
+
+        var httpClient = _httpClientFactory();
+
+        try
+        {
+            var responseBody = await BcsReadApiRequestExecutor
+                .SendAsync(
+                    httpClient,
+                    _tokens,
+                    _requestSender,
+                    accessToken => CreateRequestMessage(
+                        accessToken,
+                        classCode.Trim(),
+                        ticker.Trim(),
+                        startDate,
+                        endDate,
+                        normalizedTimeFrame),
+                    "candles-chart",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            var candles = JsonSerializer.Deserialize<BcsCandlesResponse>(
+                responseBody,
+                BcsJson.SerializerOptions);
+
+            if (candles is null)
+            {
+                throw new JsonException("BCS candles response body is empty or cannot be deserialized.");
+            }
+
+            return candles;
+        }
+        finally
+        {
+            if (_disposeHttpClientAfterRequest)
+            {
+                httpClient.Dispose();
+            }
+        }
+    }
+
+    private HttpRequestMessage CreateRequestMessage(
+        string accessToken,
+        string classCode,
+        string ticker,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        string timeFrame)
+    {
+        var requestMessage = new HttpRequestMessage(
+            HttpMethod.Get,
+            CreateCandlesUrl(classCode, ticker, startDate, endDate, timeFrame));
+
+        requestMessage.Headers.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        return requestMessage;
+    }
+
+    private Uri CreateCandlesUrl(
+        string classCode,
+        string ticker,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        string timeFrame)
+    {
+        var query = string.Create(
+            CultureInfo.InvariantCulture,
+            $"classCode={Uri.EscapeDataString(classCode)}" +
+            $"&ticker={Uri.EscapeDataString(ticker)}" +
+            $"&startDate={Uri.EscapeDataString(FormatQueryDate(startDate))}" +
+            $"&endDate={Uri.EscapeDataString(FormatQueryDate(endDate))}" +
+            $"&timeFrame={Uri.EscapeDataString(timeFrame)}");
+
+        var builder = new UriBuilder(_candlesUrl)
+        {
+            Query = query,
+        };
+
+        return builder.Uri;
+    }
+
+    private static string NormalizeTimeFrame(string timeFrame)
+    {
+        ArgumentNullException.ThrowIfNull(timeFrame);
+
+        var normalizedTimeFrame = timeFrame.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedTimeFrame))
+        {
+            throw new ArgumentException("Candle time frame is required.", nameof(timeFrame));
+        }
+
+        if (!BcsCandleTimeFrames.IsKnown(normalizedTimeFrame))
+        {
+            throw new ArgumentException(
+                $"Unsupported candle time frame '{timeFrame}'.",
+                nameof(timeFrame));
+        }
+
+        return normalizedTimeFrame;
+    }
+
+    private static void ValidateDateRange(
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        string timeFrame)
+    {
+        var duration = endDate - startDate;
+        if (duration <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(endDate),
+                endDate,
+                "End date must be greater than start date.");
+        }
+
+        var requestedCandles = string.Equals(timeFrame, BcsCandleTimeFrames.Month, StringComparison.Ordinal)
+            ? CountMonthCandles(startDate, endDate)
+            : CountFixedFrameCandles(duration, timeFrame);
+
+        if (requestedCandles > MaxCandlesPerRequest)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(endDate),
+                endDate,
+                $"Requested interval contains {requestedCandles} candles for time frame {timeFrame}; maximum is {MaxCandlesPerRequest}.");
+        }
+    }
+
+    private static long CountFixedFrameCandles(TimeSpan duration, string timeFrame)
+    {
+        var frameDuration = BcsCandleTimeFrames.GetFixedDuration(timeFrame);
+        if (frameDuration is null)
+        {
+            throw new InvalidOperationException($"Unsupported fixed candle time frame '{timeFrame}'.");
+        }
+
+        return CountCeiling(duration.Ticks, frameDuration.Value.Ticks);
+    }
+
+    private static long CountMonthCandles(DateTimeOffset startDate, DateTimeOffset endDate)
+    {
+        var start = startDate.UtcDateTime;
+        var end = endDate.UtcDateTime;
+        var months = ((end.Year - start.Year) * 12) + end.Month - start.Month;
+
+        if (start.AddMonths(months) < end)
+        {
+            months++;
+        }
+
+        return Math.Max(1, months);
+    }
+
+    private static long CountCeiling(long value, long divisor) =>
+        ((value - 1) / divisor) + 1;
+
+    private static string FormatQueryDate(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
+}

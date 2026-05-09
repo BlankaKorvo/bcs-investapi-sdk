@@ -2,7 +2,9 @@ namespace Bcs.InvestApi.Tests;
 
 using System.Net;
 using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Instruments;
 using Bcs.InvestApi.Limits;
+using Bcs.InvestApi.MarketData;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
@@ -69,6 +71,99 @@ public sealed class BcsEndpointUrlTests
         Assert.Equal(
             new Uri("https://mock.example/root/trade-api-information-service/api/v1/trading-schedule/daily-schedule?classCode=TQBR&ticker=SBER"),
             handler.LastRequest.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetInstrumentsByIsinsPageAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsReadHttpSender(settings));
+
+        await service.GetInstrumentsByIsinsPageAsync(new[] { "RU0007661625" }, page: 2, size: 50);
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-information-service/api/v1/instruments/by-isins?size=50&page=2"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal("""{"isins":["RU0007661625"]}""", handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task GetInstrumentsByTickersPageAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsReadHttpSender(settings));
+
+        await service.GetInstrumentsByTickersPageAsync(new[] { "SBER" }, page: 2, size: 50);
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-information-service/api/v1/instruments/by-tickers?size=50&page=2"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal("""{"tickers":["SBER"]}""", handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task GetInstrumentsByTypePageAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsReadHttpSender(settings));
+
+        await service.GetInstrumentsByTypePageAsync(
+            BcsInstrumentTypes.Options,
+            page: 2,
+            size: 50,
+            baseAssetTicker: "SBER");
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-information-service/api/v1/instruments/by-type?type=OPTIONS&baseAssetTicker=SBER&size=50&page=2"),
+            handler.LastRequest.RequestUri);
+        Assert.Null(handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task GetCandlesAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"ticker":"SBER","classCode":"TQBR","startDate":"2025-11-14T07:00:00Z","endDate":"2025-11-14T10:00:00Z","timeFrame":"H1","bars":[]}""")));
+        var service = new BcsMarketDataService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsReadHttpSender(settings));
+
+        await service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
+            BcsCandleTimeFrames.Hour1);
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T10%3A00%3A00.0000000Z&timeFrame=H1"),
+            handler.LastRequest.RequestUri);
+        Assert.Null(handler.LastRequestContent);
     }
 
     [Fact]

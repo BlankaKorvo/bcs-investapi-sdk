@@ -1,5 +1,7 @@
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Instruments;
+using Bcs.InvestApi.MarketData;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN");
 if (string.IsNullOrWhiteSpace(refreshToken))
@@ -27,6 +29,38 @@ Console.WriteLine($"Futures limits: {limits.FuturesLimits.Count}");
 var portfolio = await client.GetPortfolioAsync();
 Console.WriteLine($"Portfolio positions: {portfolio.Count}");
 
+var isins = GetConfiguredIsins();
+var instruments = await client.GetInstrumentsByIsinsAsync(isins);
+Console.WriteLine($"Instruments by ISIN: {instruments.Count}");
+
+foreach (var instrument in instruments.Take(10))
+{
+    Console.WriteLine(
+        $"  {instrument.Isin}: {instrument.Ticker} {instrument.PrimaryBoard} {instrument.DisplayName}");
+}
+
+var tickers = GetConfiguredTickers();
+var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(tickers);
+Console.WriteLine($"Instruments by ticker: {instrumentsByTicker.Count}");
+
+foreach (var instrument in instrumentsByTicker.Take(10))
+{
+    Console.WriteLine(
+        $"  {instrument.Ticker}: {instrument.Isin} {instrument.PrimaryBoard} {instrument.DisplayName}");
+}
+
+var stocksPage = await client.GetInstrumentsByTypePageAsync(
+    BcsInstrumentTypes.Stock,
+    page: 0,
+    size: 10);
+Console.WriteLine($"Instruments by type STOCK page: {stocksPage.Count}");
+
+foreach (var instrument in stocksPage)
+{
+    Console.WriteLine(
+        $"  {instrument.Ticker}: {instrument.Isin} {instrument.PrimaryBoard} {instrument.DisplayName}");
+}
+
 var classCode = Environment.GetEnvironmentVariable("BCS_SAMPLE_CLASS_CODE");
 if (string.IsNullOrWhiteSpace(classCode))
 {
@@ -48,6 +82,22 @@ foreach (var interval in schedule.DailySchedule)
         $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
 }
 
+var candlesEnd = DateTimeOffset.UtcNow;
+var candlesStart = candlesEnd.AddDays(-45);
+var candles = await client.GetCandlesAsync(
+    classCode,
+    ticker,
+    candlesStart,
+    candlesEnd,
+    BcsCandleTimeFrames.Minute1);
+Console.WriteLine($"H1 candles for {classCode}/{ticker}: {candles.Bars.Count}");
+
+foreach (var bar in candles.Bars.Take(10))
+{
+    Console.WriteLine(
+        $"  {bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
+}
+
 await client.Tokens.StopAutoRefreshAsync();
 
 return 0;
@@ -65,4 +115,28 @@ static string MaskToken(string token)
     }
 
     return $"{token[..6]}...{token[^6..]}";
+}
+
+static string[] GetConfiguredIsins()
+{
+    var rawIsins = Environment.GetEnvironmentVariable("BCS_SAMPLE_ISINS");
+    if (string.IsNullOrWhiteSpace(rawIsins))
+    {
+        return new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" };
+    }
+
+    return rawIsins
+        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+static string[] GetConfiguredTickers()
+{
+    var rawTickers = Environment.GetEnvironmentVariable("BCS_SAMPLE_TICKERS");
+    if (string.IsNullOrWhiteSpace(rawTickers))
+    {
+        return new[] { "SBER", "GAZP", "ROSN" };
+    }
+
+    return rawTickers
+        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

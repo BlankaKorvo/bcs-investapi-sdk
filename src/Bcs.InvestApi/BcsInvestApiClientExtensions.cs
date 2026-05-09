@@ -2,7 +2,9 @@ namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Instruments;
 using Bcs.InvestApi.Limits;
+using Bcs.InvestApi.MarketData;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
@@ -125,11 +127,35 @@ public static class BcsInvestApiClientExtensions
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
                 sp.GetRequiredService<IBcsReadHttpSender>());
         });
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+
+            return BcsInvestApiClientComposition.CreateInstrumentsService(
+                settings,
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
+                sp.GetRequiredService<IBcsAccessTokenProvider>(),
+                sp.GetRequiredService<IBcsReadHttpSender>());
+        });
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+
+            return BcsInvestApiClientComposition.CreateMarketDataService(
+                settings,
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
+                sp.GetRequiredService<IBcsAccessTokenProvider>(),
+                sp.GetRequiredService<IBcsReadHttpSender>());
+        });
         services.AddSingleton(sp => new BcsInvestApiClient(
             sp.GetRequiredService<BcsAuthService>(),
             sp.GetRequiredService<BcsTokenManager>(),
             sp.GetRequiredService<BcsLimitsService>(),
             sp.GetRequiredService<BcsPortfolioService>(),
-            sp.GetRequiredService<BcsTradingScheduleService>()));
+            sp.GetRequiredService<BcsTradingScheduleService>(),
+            sp.GetRequiredService<BcsInstrumentsService>(),
+            sp.GetRequiredService<BcsMarketDataService>()));
     }
 }

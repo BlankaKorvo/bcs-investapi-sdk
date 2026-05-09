@@ -21,7 +21,8 @@ net10.0
 - Retries only for idempotent read/query HTTP calls.
 - `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
 - Typed `BcsAuthException` for non-success auth responses.
-- Typed limits, portfolio, and daily trading schedule endpoints.
+- Typed limits, portfolio, daily trading schedule, instruments-by-ISIN, instruments-by-ticker, instruments-by-type,
+  and historical candles endpoints.
 
 ## Architecture
 
@@ -98,6 +99,8 @@ Form fields:
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Instruments;
+using Bcs.InvestApi.MarketData;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -108,6 +111,20 @@ await using var client = BcsInvestApiClientFactory.Create(
 
 var accessToken = await client.Tokens.GetAccessTokenAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
+var instruments = await client.GetInstrumentsByIsinsAsync(
+    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" });
+var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(
+    new[] { "SBER", "GAZP", "ROSN" });
+var stocks = await client.GetInstrumentsByTypePageAsync(
+    BcsInstrumentTypes.Stock,
+    page: 0,
+    size: 50);
+var candles = await client.GetCandlesAsync(
+    "TQBR",
+    "SBER",
+    new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+    new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
+    BcsCandleTimeFrames.Hour1);
 ```
 
 ### DI
@@ -143,6 +160,93 @@ public sealed class MyService
         _client.Tokens.GetAccessTokenAsync(ct).AsTask();
 }
 ```
+
+### Instruments by ISIN, ticker, and type
+
+`GetInstrumentsByIsinsAsync(...)` follows BCS pagination automatically: it starts from page `0` and requests the next
+page while the previous response contains exactly `size` items.
+
+```csharp
+var instruments = await client.GetInstrumentsByIsinsAsync(
+    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
+    size: 50);
+```
+
+`GetInstrumentsByTickersAsync(...)` uses the same pagination behavior for ticker lookup.
+
+```csharp
+var instruments = await client.GetInstrumentsByTickersAsync(
+    new[] { "SBER", "GAZP", "ROSN" },
+    size: 50);
+```
+
+Use `GetInstrumentsByIsinsPageAsync(...)` when the host needs one specific page.
+
+```csharp
+var page = await client.GetInstrumentsByIsinsPageAsync(
+    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
+    page: 0,
+    size: 50);
+```
+
+Use `GetInstrumentsByTickersPageAsync(...)` for a specific ticker page.
+
+```csharp
+var page = await client.GetInstrumentsByTickersPageAsync(
+    new[] { "SBER", "GAZP", "ROSN" },
+    page: 0,
+    size: 50);
+```
+
+`GetInstrumentsByTypeAsync(...)` follows the same pagination rule for an instrument type.
+
+```csharp
+using Bcs.InvestApi.Instruments;
+
+var stocks = await client.GetInstrumentsByTypeAsync(
+    BcsInstrumentTypes.Stock,
+    size: 50);
+```
+
+For `OPTIONS`, BCS requires `baseAssetTicker`.
+
+```csharp
+var sberOptions = await client.GetInstrumentsByTypeAsync(
+    BcsInstrumentTypes.Options,
+    size: 50,
+    baseAssetTicker: "SBER");
+```
+
+Use `GetInstrumentsByTypePageAsync(...)` for one specific page.
+
+```csharp
+var page = await client.GetInstrumentsByTypePageAsync(
+    BcsInstrumentTypes.Etf,
+    page: 0,
+    size: 50);
+```
+
+### Historical candles
+
+`GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
+
+```csharp
+using Bcs.InvestApi.MarketData;
+
+var candles = await client.GetCandlesAsync(
+    classCode: "TQBR",
+    ticker: "SBER",
+    startDate: new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+    endDate: new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
+    timeFrame: BcsCandleTimeFrames.Hour1);
+
+foreach (var bar in candles.Bars)
+{
+    Console.WriteLine($"{bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
+}
+```
+
+BCS allows at most 1440 candles in one request. The SDK validates this before sending the request.
 
 Or inject the token provider abstraction:
 
