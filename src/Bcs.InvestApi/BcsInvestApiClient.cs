@@ -67,7 +67,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         return _limits.GetLimitsAsync(cancellationToken);
     }
 
-    public Task<IReadOnlyList<BcsPortfolioPosition>> GetPortfolioAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _portfolio.GetPortfolioAsync(cancellationToken);

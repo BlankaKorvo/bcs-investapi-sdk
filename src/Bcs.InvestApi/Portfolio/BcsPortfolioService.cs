@@ -50,7 +50,7 @@ internal sealed class BcsPortfolioService
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
     }
 
-    internal async Task<IReadOnlyList<BcsPortfolioPosition>> GetPortfolioAsync(CancellationToken cancellationToken = default)
+    internal async Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default)
     {
         var httpClient = _httpClientFactory();
 
@@ -60,7 +60,7 @@ internal sealed class BcsPortfolioService
                 .SendAsync(httpClient, _tokens, _requestSender, CreateRequestMessage, "portfolio", cancellationToken)
                 .ConfigureAwait(false);
 
-            var portfolio = JsonSerializer.Deserialize<List<BcsPortfolioPosition>>(
+            var portfolio = JsonSerializer.Deserialize<List<BcsPortfolioItem>>(
                 responseBody,
                 BcsJson.SerializerOptions);
 

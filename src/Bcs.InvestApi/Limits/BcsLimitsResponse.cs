@@ -21,7 +21,7 @@ public sealed record BcsDepoLimit
 
     public string? Exchange { get; init; }
 
-    public decimal AveragePrice { get; init; }
+    public decimal? AveragePrice { get; init; }
 
     public BcsLimitQuantity? Quantity { get; init; }
 
@@ -29,15 +29,15 @@ public sealed record BcsDepoLimit
 
     public string? InstrumentType { get; init; }
 
-    public DateTimeOffset LoadDate { get; init; }
+    public DateTimeOffset? LoadDate { get; init; }
 
-    public decimal LockedBuyValue { get; init; }
+    public decimal? LockedBuyValue { get; init; }
 
-    public decimal LockedSellValue { get; init; }
+    public decimal? LockedSellValue { get; init; }
 
-    public decimal LockedBuyQuantity { get; init; }
+    public decimal? LockedBuyQuantity { get; init; }
 
-    public decimal LockedSellQuantity { get; init; }
+    public decimal? LockedSellQuantity { get; init; }
 }
 
 public sealed record BcsFutureHolding
@@ -48,25 +48,25 @@ public sealed record BcsFutureHolding
 
     public string? Exchange { get; init; }
 
-    public decimal CbplPlanned { get; init; }
+    public decimal? CbplPlanned { get; init; }
 
-    public decimal VarMargin { get; init; }
+    public decimal? VarMargin { get; init; }
 
-    public decimal PositionValue { get; init; }
+    public decimal? PositionValue { get; init; }
 
-    public decimal TotalNet { get; init; }
+    public decimal? TotalNet { get; init; }
 
-    public DateTimeOffset ExecutionDate { get; init; }
+    public DateTimeOffset? ExecutionDate { get; init; }
 
-    public decimal TotalVarMargin { get; init; }
+    public decimal? TotalVarMargin { get; init; }
 
-    public decimal RealVarMargin { get; init; }
+    public decimal? RealVarMargin { get; init; }
 
-    public decimal AveragePrice { get; init; }
+    public decimal? AveragePrice { get; init; }
 
     public string? InstrumentType { get; init; }
 
-    public DateTimeOffset TradeDate { get; init; }
+    public DateTimeOffset? TradeDate { get; init; }
 }
 
 public sealed record BcsMoneyLimit
@@ -75,15 +75,15 @@ public sealed record BcsMoneyLimit
 
     public string? CurrencyCode { get; init; }
 
-    public decimal Locked { get; init; }
+    public decimal? Locked { get; init; }
 
-    public decimal AveragePrice { get; init; }
+    public decimal? AveragePrice { get; init; }
 
     public string? InstrumentType { get; init; }
 
     public BcsLimitQuantity? Quantity { get; init; }
 
-    public DateTimeOffset LoadDate { get; init; }
+    public DateTimeOffset? LoadDate { get; init; }
 }
 
 public sealed record BcsFuturesLimit
@@ -93,32 +93,32 @@ public sealed record BcsFuturesLimit
     public string? Exchange { get; init; }
 
     [JsonPropertyName("accruedint")]
-    public decimal AccruedInt { get; init; }
+    public decimal? AccruedInt { get; init; }
 
-    public decimal CbpLimit { get; init; }
+    public decimal? CbpLimit { get; init; }
 
-    public decimal CbplUsed { get; init; }
+    public decimal? CbplUsed { get; init; }
 
-    public decimal CbplPlanned { get; init; }
+    public decimal? CbplPlanned { get; init; }
 
-    public decimal CbplUsedForOrders { get; init; }
+    public decimal? CbplUsedForOrders { get; init; }
 
-    public decimal CbplUsedForPositions { get; init; }
+    public decimal? CbplUsedForPositions { get; init; }
 
-    public decimal OptionsPremium { get; init; }
+    public decimal? OptionsPremium { get; init; }
 
     public string? InstrumentType { get; init; }
 
-    public DateTimeOffset LoadDate { get; init; }
+    public DateTimeOffset? LoadDate { get; init; }
 
-    public decimal VarMargin { get; init; }
+    public decimal? VarMargin { get; init; }
 
-    public decimal RealVarMargin { get; init; }
+    public decimal? RealVarMargin { get; init; }
 }
 
 public sealed record BcsLimitQuantity
 {
     public string? Type { get; init; }
 
-    public decimal Value { get; init; }
+    public decimal? Value { get; init; }
 }

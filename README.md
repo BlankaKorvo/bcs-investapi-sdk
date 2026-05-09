@@ -155,7 +155,7 @@ public sealed class MyService
         _client = client;
     }
 
-    public Task<IReadOnlyList<BcsPortfolioPosition>> GetPortfolioAsync(CancellationToken ct) =>
+    public Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken ct) =>
         _client.GetPortfolioAsync(ct);
 }
 ```
@@ -218,7 +218,7 @@ foreach (var bar in candles.Bars)
 }
 ```
 
-BCS allows at most 1440 candles in one request. The SDK validates this before sending the request.
+BCS allows at most 1440 candles in one request.
 
 ## Raw Auth Boundary
 
