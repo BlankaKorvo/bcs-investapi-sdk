@@ -1,7 +1,5 @@
 namespace Bcs.InvestApi.TradingSchedule;
 
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
@@ -9,18 +7,15 @@ internal sealed class BcsTradingScheduleService
 {
     private const string DailySchedulePath = "trade-api-information-service/api/v1/trading-schedule/daily-schedule";
 
-    private readonly Func<HttpClient> _httpClientFactory;
-    private readonly bool _disposeHttpClientAfterRequest;
     private readonly Uri _dailyScheduleUrl;
-    private readonly IBcsHttpSender _requestSender;
-    private readonly IBcsAccessTokenProvider _tokens;
+    private readonly BcsApiRequestExecutor _executor;
 
     internal BcsTradingScheduleService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsHttpSender requestSender)
-        : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
+        : this(settings, new BcsApiRequestExecutor(httpClient, tokens, requestSender))
     {
     }
 
@@ -29,28 +24,22 @@ internal sealed class BcsTradingScheduleService
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsHttpSender requestSender)
-        : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
+        : this(settings, new BcsApiRequestExecutor(httpClientFactory, tokens, requestSender))
     {
     }
 
     private BcsTradingScheduleService(
         BcsInvestApiSettings settings,
-        Func<HttpClient> httpClientFactory,
-        IBcsAccessTokenProvider tokens,
-        IBcsHttpSender requestSender,
-        bool disposeHttpClientAfterRequest)
+        BcsApiRequestExecutor executor)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-        _requestSender = requestSender ?? throw new ArgumentNullException(nameof(requestSender));
+        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _dailyScheduleUrl = settings.CreateEndpointUrl(DailySchedulePath);
-        _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
     }
 
-    internal async Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
+    internal Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
         string classCode,
         string ticker,
         CancellationToken cancellationToken = default)
@@ -58,38 +47,10 @@ internal sealed class BcsTradingScheduleService
         ArgumentException.ThrowIfNullOrEmpty(classCode);
         ArgumentException.ThrowIfNullOrEmpty(ticker);
 
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            var responseBody = await BcsReadApiRequestExecutor
-                .SendAsync(
-                    httpClient,
-                    _tokens,
-                    _requestSender,
-                    accessToken => CreateRequestMessage(accessToken, classCode, ticker),
-                    "daily-trading-schedule",
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            var schedule = JsonSerializer.Deserialize<BcsDailyTradingScheduleResponse>(
-                responseBody,
-                BcsJson.SerializerOptions);
-
-            if (schedule is null)
-            {
-                throw new JsonException("BCS daily trading schedule response body is empty or cannot be deserialized.");
-            }
-
-            return schedule;
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
+        return _executor.SendJsonAsync<BcsDailyTradingScheduleResponse>(
+            accessToken => CreateRequestMessage(accessToken, classCode, ticker),
+            "daily-trading-schedule",
+            cancellationToken);
     }
 
     private HttpRequestMessage CreateRequestMessage(
@@ -97,15 +58,11 @@ internal sealed class BcsTradingScheduleService
         string classCode,
         string ticker)
     {
-        var requestMessage = new HttpRequestMessage(
-            HttpMethod.Get,
-            CreateDailyScheduleUrl(classCode, ticker));
-
-        requestMessage.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        return requestMessage;
+        return new HttpRequestMessage(
+                HttpMethod.Get,
+                CreateDailyScheduleUrl(classCode, ticker))
+            .WithBearer(accessToken)
+            .AcceptJson();
     }
 
     private Uri CreateDailyScheduleUrl(string classCode, string ticker)

@@ -201,7 +201,7 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenReturnsInvalidGrant_FallsBackOnceToSettingsRefreshToken()
+    public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenReturnsInvalidGrant_ThrowsAndClearsCurrentTokenWithoutRetry()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestedRefreshTokens = new List<string>();
@@ -212,22 +212,23 @@ public sealed class BcsTokenManagerTests
 
             return refreshToken == "runtime-refresh-1"
                 ? JsonResponse(HttpStatusCode.BadRequest, InvalidGrantJson("Runtime refresh token was revoked."))
-                : JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"));
+                : throw new InvalidOperationException("Settings refresh token must not be retried automatically.");
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
         SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1"));
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
         var current = await manager.GetCurrentTokenSetAsync();
 
-        Assert.Equal("access-2", accessToken);
-        Assert.Equal("current-refresh-2", current?.RefreshToken);
-        Assert.Equal(2, handler.RequestCount);
-        Assert.Equal(new[] { "runtime-refresh-1", "settings-refresh-1" }, requestedRefreshTokens);
+        Assert.Equal("invalid_grant", exception.Error);
+        Assert.Equal("Runtime refresh token was revoked.", exception.ErrorDescription);
+        Assert.Null(current);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal(new[] { "runtime-refresh-1" }, requestedRefreshTokens);
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_WhenFallbackSettingsRefreshTokenReturnsInvalidGrant_ThrowsAndClearsCurrentToken()
+    public async Task GetAccessTokenAsync_WhenSettingsRefreshTokenReturnsInvalidGrant_ThrowsWithoutRetry()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestedRefreshTokens = new List<string>();
@@ -238,12 +239,9 @@ public sealed class BcsTokenManagerTests
 
             return JsonResponse(
                 HttpStatusCode.BadRequest,
-                InvalidGrantJson(refreshToken == "settings-refresh-1"
-                    ? "Bootstrap refresh token was rejected."
-                    : "Runtime refresh token was revoked."));
+                InvalidGrantJson("Bootstrap refresh token was rejected."));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1"));
 
         var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
         var current = await manager.GetCurrentTokenSetAsync();
@@ -251,8 +249,8 @@ public sealed class BcsTokenManagerTests
         Assert.Equal("invalid_grant", exception.Error);
         Assert.Equal("Bootstrap refresh token was rejected.", exception.ErrorDescription);
         Assert.Null(current);
-        Assert.Equal(2, handler.RequestCount);
-        Assert.Equal(new[] { "runtime-refresh-1", "settings-refresh-1" }, requestedRefreshTokens);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal(new[] { "settings-refresh-1" }, requestedRefreshTokens);
     }
 
     [Fact]

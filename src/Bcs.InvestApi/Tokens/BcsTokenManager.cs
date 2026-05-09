@@ -138,14 +138,7 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
             IsInvalidGrant(ex))
         {
             Volatile.Write(ref _currentTokenSet, null);
-
-            var settingsRefreshToken = _settings.GetRequiredRefreshToken();
-            if (string.Equals(settingsRefreshToken, resolvedRefreshToken.RefreshToken, StringComparison.Ordinal))
-            {
-                throw;
-            }
-
-            return await ExchangeRefreshTokenAsync(settingsRefreshToken, cancellationToken).ConfigureAwait(false);
+            throw;
         }
     }
 

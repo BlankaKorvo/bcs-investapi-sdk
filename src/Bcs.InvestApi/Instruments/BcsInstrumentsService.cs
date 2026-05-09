@@ -1,7 +1,6 @@
 namespace Bcs.InvestApi.Instruments;
 
 using System.Globalization;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
@@ -12,22 +11,18 @@ internal sealed class BcsInstrumentsService
     private const string InstrumentsByIsinsPath = "trade-api-information-service/api/v1/instruments/by-isins";
     private const string InstrumentsByTickersPath = "trade-api-information-service/api/v1/instruments/by-tickers";
     private const string InstrumentsByTypePath = "trade-api-information-service/api/v1/instruments/by-type";
-    private const int MaxPageSize = 100;
 
-    private readonly Func<HttpClient> _httpClientFactory;
-    private readonly bool _disposeHttpClientAfterRequest;
+    private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _instrumentsByIsinsUrl;
     private readonly Uri _instrumentsByTickersUrl;
     private readonly Uri _instrumentsByTypeUrl;
-    private readonly IBcsHttpSender _requestSender;
-    private readonly IBcsAccessTokenProvider _tokens;
 
     internal BcsInstrumentsService(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsHttpSender requestSender)
-        : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
+        : this(settings, new BcsApiRequestExecutor(httpClient, tokens, requestSender))
     {
     }
 
@@ -36,27 +31,21 @@ internal sealed class BcsInstrumentsService
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsHttpSender requestSender)
-        : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
+        : this(settings, new BcsApiRequestExecutor(httpClientFactory, tokens, requestSender))
     {
     }
 
     private BcsInstrumentsService(
         BcsInvestApiSettings settings,
-        Func<HttpClient> httpClientFactory,
-        IBcsAccessTokenProvider tokens,
-        IBcsHttpSender requestSender,
-        bool disposeHttpClientAfterRequest)
+        BcsApiRequestExecutor executor)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTransportSettings();
 
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-        _requestSender = requestSender ?? throw new ArgumentNullException(nameof(requestSender));
+        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _instrumentsByIsinsUrl = settings.CreateEndpointUrl(InstrumentsByIsinsPath);
         _instrumentsByTickersUrl = settings.CreateEndpointUrl(InstrumentsByTickersPath);
         _instrumentsByTypeUrl = settings.CreateEndpointUrl(InstrumentsByTypePath);
-        _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
     }
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
@@ -69,28 +58,14 @@ internal sealed class BcsInstrumentsService
         ValidatePage(page);
         ValidateSize(size);
 
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            return await SendPageAsync(
-                httpClient,
-                requestedIsins,
-                page,
-                size,
-                CreateIsinsRequestMessage,
-                "instruments-by-isins",
-                "BCS instruments by ISIN response body is empty or cannot be deserialized.",
-                cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
+        return await SendPageAsync(
+            requestedIsins,
+            page,
+            size,
+            CreateIsinsRequestMessage,
+            "instruments-by-isins",
+            cancellationToken)
+            .ConfigureAwait(false);
     }
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
@@ -103,28 +78,14 @@ internal sealed class BcsInstrumentsService
         ValidatePage(page);
         ValidateSize(size);
 
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            return await SendPageAsync(
-                httpClient,
-                requestedTickers,
-                page,
-                size,
-                CreateTickersRequestMessage,
-                "instruments-by-tickers",
-                "BCS instruments by ticker response body is empty or cannot be deserialized.",
-                cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
+        return await SendPageAsync(
+            requestedTickers,
+            page,
+            size,
+            CreateTickersRequestMessage,
+            "instruments-by-tickers",
+            cancellationToken)
+            .ConfigureAwait(false);
     }
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
@@ -134,93 +95,48 @@ internal sealed class BcsInstrumentsService
         string? baseAssetTicker = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrEmpty(type);
-        ValidateBaseAssetTicker(type, baseAssetTicker);
+        ArgumentException.ThrowIfNullOrWhiteSpace(type);
         ValidatePage(page);
         ValidateSize(size);
 
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            return await SendTypePageAsync(
-                httpClient,
-                type,
-                baseAssetTicker,
-                page,
-                size,
-                cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
+        return await SendTypePageAsync(
+            type,
+            baseAssetTicker,
+            page,
+            size,
+            cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<IReadOnlyList<BcsInstrument>> SendPageAsync(
-        HttpClient httpClient,
         IReadOnlyList<string> instrumentIds,
         int page,
         int size,
         Func<string, IReadOnlyList<string>, int, int, HttpRequestMessage> requestFactory,
         string endpoint,
-        string emptyResponseBodyMessage,
         CancellationToken cancellationToken)
     {
-        var responseBody = await BcsReadApiRequestExecutor
-            .SendAsync(
-                httpClient,
-                _tokens,
-                _requestSender,
+        return await _executor
+            .SendJsonAsync<List<BcsInstrument>>(
                 accessToken => requestFactory(accessToken, instrumentIds, page, size),
                 endpoint,
                 cancellationToken)
             .ConfigureAwait(false);
-
-        var instruments = JsonSerializer.Deserialize<List<BcsInstrument>>(
-            responseBody,
-            BcsJson.SerializerOptions);
-
-        if (instruments is null)
-        {
-            throw new JsonException(emptyResponseBodyMessage);
-        }
-
-        return instruments;
     }
 
     private async Task<IReadOnlyList<BcsInstrument>> SendTypePageAsync(
-        HttpClient httpClient,
         string type,
         string? baseAssetTicker,
         int page,
         int size,
         CancellationToken cancellationToken)
     {
-        var responseBody = await BcsReadApiRequestExecutor
-            .SendAsync(
-                httpClient,
-                _tokens,
-                _requestSender,
+        return await _executor
+            .SendJsonAsync<List<BcsInstrument>>(
                 accessToken => CreateTypeRequestMessage(accessToken, type, baseAssetTicker, page, size),
                 "instruments-by-type",
                 cancellationToken)
             .ConfigureAwait(false);
-
-        var instruments = JsonSerializer.Deserialize<List<BcsInstrument>>(
-            responseBody,
-            BcsJson.SerializerOptions);
-
-        if (instruments is null)
-        {
-            throw new JsonException("BCS instruments by type response body is empty or cannot be deserialized.");
-        }
-
-        return instruments;
     }
 
     private HttpRequestMessage CreateIsinsRequestMessage(
@@ -230,12 +146,10 @@ internal sealed class BcsInstrumentsService
         int size)
     {
         var requestMessage = new HttpRequestMessage(
-            HttpMethod.Post,
-            CreateInstrumentsByIsinsUrl(page, size));
-
-        requestMessage.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                HttpMethod.Post,
+                CreateInstrumentsByIsinsUrl(page, size))
+            .WithBearer(accessToken)
+            .AcceptJson();
         requestMessage.Content = new StringContent(
             JsonSerializer.Serialize(new BcsInstrumentsByIsinsRequest(isins), BcsJson.SerializerOptions),
             Encoding.UTF8,
@@ -251,15 +165,11 @@ internal sealed class BcsInstrumentsService
         int page,
         int size)
     {
-        var requestMessage = new HttpRequestMessage(
-            HttpMethod.Get,
-            CreateInstrumentsByTypeUrl(type, baseAssetTicker, page, size));
-
-        requestMessage.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        return requestMessage;
+        return new HttpRequestMessage(
+                HttpMethod.Get,
+                CreateInstrumentsByTypeUrl(type, baseAssetTicker, page, size))
+            .WithBearer(accessToken)
+            .AcceptJson();
     }
 
     private HttpRequestMessage CreateTickersRequestMessage(
@@ -269,12 +179,10 @@ internal sealed class BcsInstrumentsService
         int size)
     {
         var requestMessage = new HttpRequestMessage(
-            HttpMethod.Post,
-            CreateInstrumentsByTickersUrl(page, size));
-
-        requestMessage.Headers.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                HttpMethod.Post,
+                CreateInstrumentsByTickersUrl(page, size))
+            .WithBearer(accessToken)
+            .AcceptJson();
         requestMessage.Content = new StringContent(
             JsonSerializer.Serialize(new BcsInstrumentsByTickersRequest(tickers), BcsJson.SerializerOptions),
             Encoding.UTF8,
@@ -307,7 +215,7 @@ internal sealed class BcsInstrumentsService
             CultureInfo.InvariantCulture,
             $"type={Uri.EscapeDataString(type)}");
 
-        if (!string.IsNullOrEmpty(baseAssetTicker))
+        if (!string.IsNullOrWhiteSpace(baseAssetTicker))
         {
             query += string.Create(
                 CultureInfo.InvariantCulture,
@@ -350,19 +258,6 @@ internal sealed class BcsInstrumentsService
         return ValidateValues(tickers, nameof(tickers), "ticker");
     }
 
-    private static void ValidateBaseAssetTicker(string type, string? baseAssetTicker)
-    {
-        if (string.IsNullOrEmpty(baseAssetTicker))
-        {
-            if (string.Equals(type, BcsInstrumentTypes.Options, StringComparison.Ordinal))
-            {
-                throw new ArgumentException(
-                    "Base asset ticker is required when instrument type is OPTIONS.",
-                    nameof(baseAssetTicker));
-            }
-        }
-    }
-
     private static IReadOnlyList<string> ValidateValues(
         IEnumerable<string> values,
         string parameterName,
@@ -377,9 +272,9 @@ internal sealed class BcsInstrumentsService
             throw new ArgumentException($"At least one {displayName} is required.", parameterName);
         }
 
-        if (requestedValues.Any(string.IsNullOrEmpty))
+        if (requestedValues.Any(string.IsNullOrWhiteSpace))
         {
-            throw new ArgumentException($"{displayName} values must not be null or empty.", parameterName);
+            throw new ArgumentException($"{displayName} values must not be null or whitespace.", parameterName);
         }
 
         return requestedValues;
@@ -398,12 +293,12 @@ internal sealed class BcsInstrumentsService
 
     private static void ValidateSize(int size)
     {
-        if (size is < 1 or > MaxPageSize)
+        if (size < 1)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(size),
                 size,
-                "Page size must be between 1 and 100.");
+                "Page size must be greater than or equal to one.");
         }
     }
 
