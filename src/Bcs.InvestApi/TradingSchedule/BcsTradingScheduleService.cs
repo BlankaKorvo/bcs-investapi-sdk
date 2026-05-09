@@ -1,5 +1,6 @@
 namespace Bcs.InvestApi.TradingSchedule;
 
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
@@ -8,6 +9,8 @@ using Bcs.InvestApi.Tokens;
 internal sealed class BcsTradingScheduleService
 {
     private const string DailySchedulePath = "trade-api-information-service/api/v1/trading-schedule/daily-schedule";
+    private const string EmptyDailyScheduleErrorText = "dailyScheduleLine is empty";
+    private const string EmptyDailyScheduleErrorType = "NOT_FOUND";
 
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
@@ -83,6 +86,10 @@ internal sealed class BcsTradingScheduleService
 
             return schedule;
         }
+        catch (BcsApiException ex) when (IsEmptyDailyScheduleNotFound(ex))
+        {
+            return new BcsDailyTradingScheduleResponse { IsWorkDay = false };
+        }
         finally
         {
             if (_disposeHttpClientAfterRequest)
@@ -120,5 +127,34 @@ internal sealed class BcsTradingScheduleService
         };
 
         return builder.Uri;
+    }
+
+    private static bool IsEmptyDailyScheduleNotFound(BcsApiException exception)
+    {
+        if (exception.StatusCode != HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(exception.ResponseBody);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("type", out var type) ||
+                !string.Equals(type.GetString(), EmptyDailyScheduleErrorType, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return root.TryGetProperty("displayOptions", out var displayOptions) &&
+                displayOptions.ValueKind == JsonValueKind.Object &&
+                displayOptions.TryGetProperty("text", out var text) &&
+                string.Equals(text.GetString(), EmptyDailyScheduleErrorText, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
