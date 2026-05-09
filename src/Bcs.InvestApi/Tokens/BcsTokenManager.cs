@@ -66,19 +66,33 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         return tokenSet.AccessToken;
     }
 
-    public async ValueTask<BcsTokenSet> GetTokenSetAsync(CancellationToken cancellationToken = default) =>
-        await RefreshIfRequiredAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+    public async ValueTask<BcsAccessTokenInfo> GetAccessTokenInfoAsync(CancellationToken cancellationToken = default)
+    {
+        var tokenSet = await RefreshIfRequiredAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+        return tokenSet.ToAccessTokenInfo();
+    }
 
-    public ValueTask<BcsTokenSet?> GetCurrentTokenSetAsync(CancellationToken cancellationToken = default)
+    public ValueTask<BcsAccessTokenInfo?> GetCurrentAccessTokenInfoAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ValueTask.FromResult(GetCurrentTokenSetOrNull()?.ToAccessTokenInfo());
+    }
+
+    public async ValueTask<BcsAccessTokenInfo> RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        var tokenSet = await RefreshIfRequiredAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
+        return tokenSet.ToAccessTokenInfo();
+    }
+
+    internal ValueTask<BcsTokenSet?> GetCurrentTokenSetAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
 
         return ValueTask.FromResult(GetCurrentTokenSetOrNull());
     }
-
-    public async ValueTask<BcsTokenSet> RefreshAsync(CancellationToken cancellationToken = default) =>
-        await RefreshIfRequiredAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
 
     public void StartAutoRefresh()
     {

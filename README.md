@@ -19,7 +19,7 @@ net10.0
 - Optional auto-refresh loop.
 - DI integration with singleton `BcsTokenManager`.
 - Separate retry policy for auth and normal HTTP calls.
-- `IBcsAccessTokenProvider` abstraction for HTTP API clients.
+- `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
 - Typed `BcsAuthException` for non-success auth responses.
 - Raw auth request/response DTOs.
 
@@ -84,7 +84,10 @@ Form fields:
 - `GetAccessTokenAsync()` returns the in-memory access token while it is valid under `TokenRefreshSkew`.
 - If the access token expires soon, it calls the auth endpoint under a `SemaphoreSlim` refresh gate.
 - Concurrent callers re-check the in-memory token after entering the refresh gate.
-- `RefreshAsync()` always calls the auth endpoint.
+- `GetAccessTokenInfoAsync()` and `GetCurrentAccessTokenInfoAsync()` return safe access-token metadata without the
+  runtime `refresh_token`.
+- `RefreshAsync()` always calls the auth endpoint and returns safe access-token metadata without the runtime
+  `refresh_token`.
 
 ## Usage Examples
 
@@ -118,6 +121,8 @@ services.AddBcsInvestApiClient(settings =>
 ```
 
 `AddBcsInvestApiClient` registers `BcsTokenManager` as a singleton and exposes it through `IBcsAccessTokenProvider`.
+The provider interface intentionally exposes only `GetAccessTokenAsync()` so upper layers cannot accidentally log or
+persist the runtime rotated `refresh_token`.
 
 Inject the facade:
 
@@ -233,7 +238,7 @@ BCS `400 invalid_grant` response is exposed as `BcsAuthException`:
 ```csharp
 try
 {
-    var token = await client.Tokens.GetTokenSetAsync();
+    var token = await client.Tokens.RefreshAsync();
 }
 catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 {

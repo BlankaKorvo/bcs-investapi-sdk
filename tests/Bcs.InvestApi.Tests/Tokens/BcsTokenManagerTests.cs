@@ -15,22 +15,37 @@ public sealed class BcsTokenManagerTests
     private static readonly TimeSpan AsyncGuardTimeout = TimeSpan.FromSeconds(2);
 
     [Fact]
-    public async Task GetCurrentTokenSetAsync_WhenNoRefreshHappened_ReturnsNull()
+    public async Task GetCurrentAccessTokenInfoAsync_WhenNoRefreshHappened_ReturnsNull()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = await manager.GetCurrentAccessTokenInfoAsync();
 
         Assert.Null(current);
         Assert.Equal(0, handler.RequestCount);
     }
 
     [Fact]
-    public void BcsTokenSet_PublicProperties_AreInitOnly()
+    public void IBcsAccessTokenProvider_PublicSurface_ExposesOnlyAccessToken()
     {
-        var mutableProperties = typeof(BcsTokenSet)
+        var methodNames = typeof(IBcsAccessTokenProvider)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Select(method => method.Name)
+            .ToArray();
+
+        Assert.Equal(new[] { nameof(IBcsAccessTokenProvider.GetAccessTokenAsync) }, methodNames);
+    }
+
+    [Fact]
+    public void BcsAccessTokenInfo_PublicProperties_DoNotExposeRefreshTokenAndAreInitOnly()
+    {
+        var publicPropertyNames = typeof(BcsAccessTokenInfo)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(property => property.Name)
+            .ToArray();
+        var mutableProperties = typeof(BcsAccessTokenInfo)
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(property => property.SetMethod is not null)
             .Where(property => !property.SetMethod!.ReturnParameter
@@ -39,7 +54,30 @@ public sealed class BcsTokenManagerTests
             .Select(property => property.Name)
             .ToArray();
 
+        Assert.DoesNotContain(nameof(BcsTokenSet.RefreshToken), publicPropertyNames);
         Assert.Empty(mutableProperties);
+    }
+
+    [Fact]
+    public void BcsTokenSet_IsInternalRuntimeState()
+    {
+        Assert.False(typeof(BcsTokenSet).IsPublic);
+    }
+
+    [Fact]
+    public void BcsTokenManager_PublicSurface_DoesNotExposeRuntimeTokenSet()
+    {
+        var publicMethods = typeof(BcsTokenManager)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Where(method => method.DeclaringType == typeof(BcsTokenManager))
+            .ToArray();
+        var publicMethodNames = publicMethods
+            .Select(method => method.Name)
+            .ToArray();
+
+        Assert.DoesNotContain("GetTokenSetAsync", publicMethodNames);
+        Assert.DoesNotContain("GetCurrentTokenSetAsync", publicMethodNames);
+        Assert.DoesNotContain(publicMethods, method => ContainsRuntimeTokenSet(method.ReturnType));
     }
 
     [Fact]
@@ -467,12 +505,16 @@ public sealed class BcsTokenManagerTests
         Assert.Equal(0, httpClientFactory.CreateClientCallCount);
 
         var first = await manager.RefreshAsync();
-        var second = await tokenProvider.RefreshAsync();
+        var currentAfterFirstRefresh = await manager.GetCurrentTokenSetAsync();
+        var second = await manager.RefreshAsync();
+        var currentAfterSecondRefresh = await manager.GetCurrentTokenSetAsync();
+        var providerAccessToken = await tokenProvider.GetAccessTokenAsync();
 
         Assert.Equal("access-1", first.AccessToken);
-        Assert.Equal("current-refresh-2", first.RefreshToken);
+        Assert.Equal("current-refresh-2", currentAfterFirstRefresh?.RefreshToken);
         Assert.Equal("access-2", second.AccessToken);
-        Assert.Equal("current-refresh-3", second.RefreshToken);
+        Assert.Equal("current-refresh-3", currentAfterSecondRefresh?.RefreshToken);
+        Assert.Equal("access-2", providerAccessToken);
         Assert.Equal(2, httpClientFactory.CreateClientCallCount);
         Assert.Equal(2, handlers.Count);
         Assert.Equal(2, handlers.Sum(handler => handler.RequestCount));
@@ -591,6 +633,10 @@ public sealed class BcsTokenManagerTests
         Assert.Equal(1, handler.RequestCount);
         Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
     }
+
+    private static bool ContainsRuntimeTokenSet(Type type) =>
+        type == typeof(BcsTokenSet) ||
+        type.GenericTypeArguments.Any(ContainsRuntimeTokenSet);
 
     private static BcsTokenManager CreateManager(
         CapturingHttpMessageHandler handler,

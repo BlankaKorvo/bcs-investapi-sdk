@@ -1,42 +1,29 @@
 namespace Bcs.InvestApi.Tokens;
 
-using System.Text.Json.Serialization;
 using Bcs.InvestApi.Auth;
 
-public sealed record BcsTokenSet
+internal sealed record BcsTokenSet
 {
-    [JsonPropertyName("access_token")]
     public required string AccessToken { get; init; }
 
-    [JsonPropertyName("refresh_token")]
     public required string RefreshToken { get; init; }
 
-    [JsonPropertyName("token_type")]
     public string TokenType { get; init; } = "bearer";
 
-    [JsonPropertyName("expires_in")]
     public long ExpiresIn { get; init; }
 
-    [JsonPropertyName("refresh_expires_in")]
     public long RefreshExpiresIn { get; init; }
 
-    [JsonPropertyName("access_token_expires_at_utc")]
     public DateTimeOffset AccessTokenExpiresAtUtc { get; init; }
 
-    [JsonPropertyName("refresh_token_expires_at_utc")]
     public DateTimeOffset RefreshTokenExpiresAtUtc { get; init; }
 
-    [JsonPropertyName("received_at_utc")]
     public DateTimeOffset ReceivedAtUtc { get; init; }
 
-    [JsonPropertyName("not-before-policy")]
-    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public long NotBeforePolicy { get; init; }
 
-    [JsonPropertyName("session_state")]
     public string SessionState { get; init; } = string.Empty;
 
-    [JsonPropertyName("scope")]
     public string Scope { get; init; } = string.Empty;
 
     public bool ShouldRefreshAccessToken(DateTimeOffset nowUtc, TimeSpan refreshSkew)
@@ -77,6 +64,14 @@ public sealed record BcsTokenSet
     internal bool HasUsableRefreshToken(DateTimeOffset nowUtc, TimeSpan refreshSkew) =>
         !string.IsNullOrWhiteSpace(RefreshToken) &&
         !IsRefreshTokenExpired(nowUtc, refreshSkew);
+
+    internal BcsAccessTokenInfo ToAccessTokenInfo() =>
+        new()
+        {
+            AccessToken = AccessToken,
+            AccessTokenExpiresAtUtc = AccessTokenExpiresAtUtc,
+            TokenType = string.IsNullOrWhiteSpace(TokenType) ? "Bearer" : TokenType,
+        };
 
     internal static BcsTokenSet FromAuthResponse(BcsAuthResponse response, DateTimeOffset receivedAtUtc)
     {
