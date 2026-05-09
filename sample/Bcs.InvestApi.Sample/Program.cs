@@ -27,6 +27,27 @@ Console.WriteLine($"Futures limits: {limits.FuturesLimits.Count}");
 var portfolio = await client.GetPortfolioAsync();
 Console.WriteLine($"Portfolio positions: {portfolio.Count}");
 
+var classCode = Environment.GetEnvironmentVariable("BCS_SAMPLE_CLASS_CODE");
+if (string.IsNullOrWhiteSpace(classCode))
+{
+    classCode = "TQBR";
+}
+
+var ticker = Environment.GetEnvironmentVariable("BCS_SAMPLE_TICKER");
+if (string.IsNullOrWhiteSpace(ticker))
+{
+    ticker = "SBER";
+}
+
+var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
+Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
+
+foreach (var interval in schedule.DailySchedule)
+{
+    Console.WriteLine(
+        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
+}
+
 await client.Tokens.StopAutoRefreshAsync();
 
 return 0;

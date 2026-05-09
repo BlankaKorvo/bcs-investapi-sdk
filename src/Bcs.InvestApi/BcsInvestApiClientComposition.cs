@@ -6,6 +6,7 @@ using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.TradingSchedule;
 
 internal static class BcsInvestApiClientComposition
 {
@@ -144,6 +145,34 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(requestSender);
 
         return new BcsPortfolioService(settings, httpClientFactory, tokens, requestSender);
+    }
+
+    public static BcsTradingScheduleService CreateTradingScheduleService(
+        BcsInvestApiSettings settings,
+        HttpClient httpClient,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsTradingScheduleService(settings, httpClient, tokens, requestSender);
+    }
+
+    public static BcsTradingScheduleService CreateTradingScheduleService(
+        BcsInvestApiSettings settings,
+        Func<HttpClient> httpClientFactory,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsTradingScheduleService(settings, httpClientFactory, tokens, requestSender);
     }
 
     public static BcsTokenManager CreateTokenManager(

@@ -21,6 +21,7 @@ net10.0
 - Retries only for idempotent read/query HTTP calls.
 - `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
 - Typed `BcsAuthException` for non-success auth responses.
+- Typed limits, portfolio, and daily trading schedule endpoints.
 
 ## Architecture
 
@@ -106,6 +107,7 @@ await using var client = BcsInvestApiClientFactory.Create(
     clientId: BcsAuthClientIds.TradeApiRead);
 
 var accessToken = await client.Tokens.GetAccessTokenAsync();
+var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
 ```
 
 ### DI

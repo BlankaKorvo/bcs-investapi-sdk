@@ -6,6 +6,7 @@ using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.TradingSchedule;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -113,10 +114,22 @@ public static class BcsInvestApiClientExtensions
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
                 sp.GetRequiredService<IBcsReadHttpSender>());
         });
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+
+            return BcsInvestApiClientComposition.CreateTradingScheduleService(
+                settings,
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
+                sp.GetRequiredService<IBcsAccessTokenProvider>(),
+                sp.GetRequiredService<IBcsReadHttpSender>());
+        });
         services.AddSingleton(sp => new BcsInvestApiClient(
             sp.GetRequiredService<BcsAuthService>(),
             sp.GetRequiredService<BcsTokenManager>(),
             sp.GetRequiredService<BcsLimitsService>(),
-            sp.GetRequiredService<BcsPortfolioService>()));
+            sp.GetRequiredService<BcsPortfolioService>(),
+            sp.GetRequiredService<BcsTradingScheduleService>()));
     }
 }

@@ -7,6 +7,7 @@ using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsApiExceptionTests
@@ -209,6 +210,36 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(errorJson, exception.ResponseBody);
         Assert.Equal("portfolio", exception.Endpoint);
         Assert.Contains("portfolio", exception.Message);
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetDailyTradingScheduleAsync_ErrorStatus_ThrowsBcsApiExceptionWithResponseBody()
+    {
+        const string errorJson = """
+        {
+          "timestamp": 0,
+          "traceId": "trace-3",
+          "type": "RESOURCE_EXHAUSTED",
+          "errors": []
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.TooManyRequests, errorJson)));
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
+            service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
+        Assert.Equal(errorJson, exception.ResponseBody);
+        Assert.Equal("daily-trading-schedule", exception.Endpoint);
+        Assert.Contains("daily-trading-schedule", exception.Message);
         Assert.Equal(1, handler.RequestCount);
     }
 

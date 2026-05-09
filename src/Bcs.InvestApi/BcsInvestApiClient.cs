@@ -4,6 +4,7 @@ using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.TradingSchedule;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
@@ -13,6 +14,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
     private readonly BcsLimitsService _limits;
     private readonly BcsPortfolioService _portfolio;
+    private readonly BcsTradingScheduleService _tradingSchedule;
     private readonly bool _ownsTokenManager;
     private readonly IDisposable? _ownedTransport;
     private bool _disposed;
@@ -21,8 +23,9 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsAuthService auth,
         BcsTokenManager tokens,
         BcsLimitsService limits,
-        BcsPortfolioService portfolio)
-        : this(auth, tokens, limits, portfolio, ownsTokenManager: false, ownedTransport: null)
+        BcsPortfolioService portfolio,
+        BcsTradingScheduleService tradingSchedule)
+        : this(auth, tokens, limits, portfolio, tradingSchedule, ownsTokenManager: false, ownedTransport: null)
     {
     }
 
@@ -31,6 +34,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsTokenManager tokens,
         BcsLimitsService limits,
         BcsPortfolioService portfolio,
+        BcsTradingScheduleService tradingSchedule,
         bool ownsTokenManager,
         IDisposable? ownedTransport)
     {
@@ -38,6 +42,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _limits = limits ?? throw new ArgumentNullException(nameof(limits));
         _portfolio = portfolio ?? throw new ArgumentNullException(nameof(portfolio));
+        _tradingSchedule = tradingSchedule ?? throw new ArgumentNullException(nameof(tradingSchedule));
         _ownsTokenManager = ownsTokenManager;
         _ownedTransport = ownedTransport;
     }
@@ -56,6 +61,15 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _portfolio.GetPortfolioAsync(cancellationToken);
+    }
+
+    public Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
+        string classCode,
+        string ticker,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _tradingSchedule.GetDailyTradingScheduleAsync(classCode, ticker, cancellationToken);
     }
 
     public void Dispose()

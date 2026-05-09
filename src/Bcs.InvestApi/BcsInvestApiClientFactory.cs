@@ -54,12 +54,18 @@ public static class BcsInvestApiClientFactory
             httpClient,
             tokens,
             BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+        var tradingSchedule = BcsInvestApiClientComposition.CreateTradingScheduleService(
+            settings,
+            httpClient,
+            tokens,
+            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
 
         return new BcsInvestApiClient(
             auth,
             tokens,
             limits,
             portfolio,
+            tradingSchedule,
             ownsTokenManager: true,
             ownedTransport: httpClient);
     }

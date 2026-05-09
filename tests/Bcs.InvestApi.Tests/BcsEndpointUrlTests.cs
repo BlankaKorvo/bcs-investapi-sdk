@@ -6,6 +6,7 @@ using Bcs.InvestApi.Limits;
 using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsEndpointUrlTests
@@ -47,6 +48,26 @@ public sealed class BcsEndpointUrlTests
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
             new Uri("https://mock.example/root/trade-api-bff-portfolio/api/v1/portfolio"),
+            handler.LastRequest.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetDailyTradingScheduleAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"isWorkDay":true,"dailySchedule":[]}""")));
+        var service = new BcsTradingScheduleService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsReadHttpSender(settings));
+
+        await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-information-service/api/v1/trading-schedule/daily-schedule?classCode=TQBR&ticker=SBER"),
             handler.LastRequest.RequestUri);
     }
 
