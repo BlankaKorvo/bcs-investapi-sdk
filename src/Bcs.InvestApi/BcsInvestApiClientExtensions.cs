@@ -93,18 +93,22 @@ public static class BcsInvestApiClientExtensions
         services.AddSingleton<IBcsAccessTokenProvider>(sp => sp.GetRequiredService<BcsTokenManager>());
         services.AddSingleton(sp =>
         {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
             var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 
             return BcsInvestApiClientComposition.CreateLimitsService(
+                settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
                 sp.GetRequiredService<IBcsReadHttpSender>());
         });
         services.AddSingleton(sp =>
         {
+            var settings = sp.GetRequiredService<IOptions<BcsInvestApiSettings>>().Value;
             var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 
             return BcsInvestApiClientComposition.CreatePortfolioService(
+                settings,
                 () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
                 sp.GetRequiredService<IBcsReadHttpSender>());

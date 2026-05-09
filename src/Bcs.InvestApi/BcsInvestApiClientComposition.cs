@@ -91,51 +91,59 @@ internal static class BcsInvestApiClientComposition
     }
 
     public static BcsLimitsService CreateLimitsService(
+        BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(tokens);
         ArgumentNullException.ThrowIfNull(requestSender);
 
-        return new BcsLimitsService(httpClient, tokens, requestSender);
+        return new BcsLimitsService(settings, httpClient, tokens, requestSender);
     }
 
     public static BcsLimitsService CreateLimitsService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         ArgumentNullException.ThrowIfNull(tokens);
         ArgumentNullException.ThrowIfNull(requestSender);
 
-        return new BcsLimitsService(httpClientFactory, tokens, requestSender);
+        return new BcsLimitsService(settings, httpClientFactory, tokens, requestSender);
     }
 
     public static BcsPortfolioService CreatePortfolioService(
+        BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(tokens);
         ArgumentNullException.ThrowIfNull(requestSender);
 
-        return new BcsPortfolioService(httpClient, tokens, requestSender);
+        return new BcsPortfolioService(settings, httpClient, tokens, requestSender);
     }
 
     public static BcsPortfolioService CreatePortfolioService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         ArgumentNullException.ThrowIfNull(tokens);
         ArgumentNullException.ThrowIfNull(requestSender);
 
-        return new BcsPortfolioService(httpClientFactory, tokens, requestSender);
+        return new BcsPortfolioService(settings, httpClientFactory, tokens, requestSender);
     }
 
     public static BcsTokenManager CreateTokenManager(

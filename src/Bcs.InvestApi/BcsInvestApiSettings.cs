@@ -4,6 +4,8 @@ using Bcs.InvestApi.Auth;
 
 public sealed class BcsInvestApiSettings
 {
+    public static readonly Uri DefaultBaseUrl = new("https://be.broker.ru");
+
     public static readonly Uri DefaultAuthUrl = new("https://be.broker.ru/trade-api-keycloak/realms/tradeapi/protocol/openid-connect/token");
 
     /// <summary>
@@ -23,7 +25,12 @@ public sealed class BcsInvestApiSettings
     public Uri AuthUrl { get; set; } = DefaultAuthUrl;
 
     /// <summary>
-    /// Allows plain HTTP auth URLs for explicit local tests. Keep false in production.
+    /// Base URL for BCS HTTP API endpoints.
+    /// </summary>
+    public Uri BaseUrl { get; set; } = DefaultBaseUrl;
+
+    /// <summary>
+    /// Allows plain HTTP URLs for explicit local tests. Keep false in production.
     /// </summary>
     public bool AllowInsecureHttpForTesting { get; set; }
 
@@ -81,6 +88,8 @@ public sealed class BcsInvestApiSettings
             throw new InvalidOperationException($"BCS auth client_id must be '{BcsAuthClientIds.TradeApiRead}' or '{BcsAuthClientIds.TradeApiWrite}'. Actual value: '{ClientId}'.");
         }
 
+        ValidateBaseUrl();
+
         if (Timeout is not null && Timeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
@@ -126,5 +135,42 @@ public sealed class BcsInvestApiSettings
         }
 
         return RefreshToken;
+    }
+
+    internal Uri CreateEndpointUrl(string relativePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ValidateBaseUrl();
+
+        return new Uri(EnsureTrailingSlash(BaseUrl), relativePath);
+    }
+
+    private void ValidateBaseUrl()
+    {
+        if (BaseUrl is null)
+        {
+            throw new InvalidOperationException("BCS base URL is not configured. Set Bcs:BaseUrl.");
+        }
+
+        var isAllowedInsecureHttp = BaseUrl.Scheme == Uri.UriSchemeHttp && AllowInsecureHttpForTesting;
+        if (!BaseUrl.IsAbsoluteUri || (BaseUrl.Scheme != Uri.UriSchemeHttps && !isAllowedInsecureHttp))
+        {
+            throw new InvalidOperationException($"BCS base URL must be an absolute HTTPS URI. Actual value: '{BaseUrl}'.");
+        }
+
+        if (!string.IsNullOrEmpty(BaseUrl.Query) || !string.IsNullOrEmpty(BaseUrl.Fragment))
+        {
+            throw new InvalidOperationException($"BCS base URL must not contain query or fragment components. Actual value: '{BaseUrl}'.");
+        }
+    }
+
+    private static Uri EnsureTrailingSlash(Uri uri)
+    {
+        if (uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal))
+        {
+            return uri;
+        }
+
+        return new Uri(uri.AbsoluteUri + "/");
     }
 }

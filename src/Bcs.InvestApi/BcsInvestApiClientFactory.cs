@@ -45,10 +45,12 @@ public static class BcsInvestApiClientFactory
             settings,
             clock);
         var limits = BcsInvestApiClientComposition.CreateLimitsService(
+            settings,
             httpClient,
             tokens,
             BcsInvestApiClientComposition.CreateReadHttpSender(settings));
         var portfolio = BcsInvestApiClientComposition.CreatePortfolioService(
+            settings,
             httpClient,
             tokens,
             BcsInvestApiClientComposition.CreateReadHttpSender(settings));

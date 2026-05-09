@@ -7,58 +7,58 @@ using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsPortfolioService
 {
-    private static readonly Uri PortfolioUrl = new("https://be.broker.ru/trade-api-bff-portfolio/api/v1/portfolio");
+    private const string PortfolioPath = "trade-api-bff-portfolio/api/v1/portfolio";
 
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
+    private readonly Uri _portfolioUrl;
     private readonly IBcsReadHttpSender _requestSender;
     private readonly IBcsAccessTokenProvider _tokens;
 
     internal BcsPortfolioService(
+        BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
-        : this(() => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
+        : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
     {
     }
 
     internal BcsPortfolioService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
-        : this(httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
+        : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
     {
     }
 
     private BcsPortfolioService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender,
         bool disposeHttpClientAfterRequest)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _requestSender = requestSender ?? throw new ArgumentNullException(nameof(requestSender));
+        _portfolioUrl = settings.CreateEndpointUrl(PortfolioPath);
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
     }
 
     internal async Task<IReadOnlyList<BcsPortfolioPosition>> GetPortfolioAsync(CancellationToken cancellationToken = default)
     {
-        var accessToken = await _tokens.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
         var httpClient = _httpClientFactory();
 
         try
         {
-            using var exchange = await _requestSender
-                .SendAsync(httpClient, () => CreateRequestMessage(accessToken), cancellationToken)
+            var responseBody = await BcsReadApiRequestExecutor
+                .SendAsync(httpClient, _tokens, _requestSender, CreateRequestMessage, "portfolio", cancellationToken)
                 .ConfigureAwait(false);
-            var response = exchange.Response;
-
-            var responseBody = await response.Content
-                .ReadAsStringAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            response.EnsureSuccessStatusCode();
 
             var portfolio = JsonSerializer.Deserialize<List<BcsPortfolioPosition>>(
                 responseBody,
@@ -80,9 +80,9 @@ internal sealed class BcsPortfolioService
         }
     }
 
-    private static HttpRequestMessage CreateRequestMessage(string accessToken)
+    private HttpRequestMessage CreateRequestMessage(string accessToken)
     {
-        var requestMessage = new HttpRequestMessage(HttpMethod.Get, PortfolioUrl);
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, _portfolioUrl);
 
         requestMessage.Headers.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));

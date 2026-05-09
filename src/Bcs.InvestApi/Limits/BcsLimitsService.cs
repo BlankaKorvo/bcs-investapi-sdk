@@ -7,58 +7,58 @@ using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsLimitsService
 {
-    private static readonly Uri LimitsUrl = new("https://be.broker.ru/trade-api-bff-limit/api/v1/limits");
+    private const string LimitsPath = "trade-api-bff-limit/api/v1/limits";
 
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
+    private readonly Uri _limitsUrl;
     private readonly IBcsReadHttpSender _requestSender;
     private readonly IBcsAccessTokenProvider _tokens;
 
     internal BcsLimitsService(
+        BcsInvestApiSettings settings,
         HttpClient httpClient,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
-        : this(() => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
+        : this(settings, () => httpClient, tokens, requestSender, disposeHttpClientAfterRequest: false)
     {
     }
 
     internal BcsLimitsService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender)
-        : this(httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
+        : this(settings, httpClientFactory, tokens, requestSender, disposeHttpClientAfterRequest: true)
     {
     }
 
     private BcsLimitsService(
+        BcsInvestApiSettings settings,
         Func<HttpClient> httpClientFactory,
         IBcsAccessTokenProvider tokens,
         IBcsReadHttpSender requestSender,
         bool disposeHttpClientAfterRequest)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.ValidateTransportSettings();
+
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _requestSender = requestSender ?? throw new ArgumentNullException(nameof(requestSender));
+        _limitsUrl = settings.CreateEndpointUrl(LimitsPath);
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
     }
 
     internal async Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default)
     {
-        var accessToken = await _tokens.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
         var httpClient = _httpClientFactory();
 
         try
         {
-            using var exchange = await _requestSender
-                .SendAsync(httpClient, () => CreateRequestMessage(accessToken), cancellationToken)
+            var responseBody = await BcsReadApiRequestExecutor
+                .SendAsync(httpClient, _tokens, _requestSender, CreateRequestMessage, "limits", cancellationToken)
                 .ConfigureAwait(false);
-            var response = exchange.Response;
-
-            var responseBody = await response.Content
-                .ReadAsStringAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            response.EnsureSuccessStatusCode();
 
             var limits = JsonSerializer.Deserialize<BcsLimitsResponse>(
                 responseBody,
@@ -80,9 +80,9 @@ internal sealed class BcsLimitsService
         }
     }
 
-    private static HttpRequestMessage CreateRequestMessage(string accessToken)
+    private HttpRequestMessage CreateRequestMessage(string accessToken)
     {
-        var requestMessage = new HttpRequestMessage(HttpMethod.Get, LimitsUrl);
+        var requestMessage = new HttpRequestMessage(HttpMethod.Get, _limitsUrl);
 
         requestMessage.Headers.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));

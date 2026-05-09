@@ -395,22 +395,24 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenCallerCancelsDuringAuthRequest_PropagatesCancellation()
+    public async Task RefreshAsync_WhenCallerCancelsDuringAuthRequest_CompletesExchangeAndStoresTokenPair()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var authCancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
         {
-            var neverCompletes = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
             using var registration = cancellationToken.Register(() =>
             {
                 authCancellationObserved.TrySetResult();
-                neverCompletes.TrySetCanceled(cancellationToken);
             });
 
             requestEntered.SetResult();
-            return await neverCompletes.Task.ConfigureAwait(false);
+            await callerCancelled.Task.WaitAsync(AsyncGuardTimeout).ConfigureAwait(false);
+
+            Assert.False(cancellationToken.IsCancellationRequested);
+            return JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
         using var callerCts = new CancellationTokenSource();
@@ -419,12 +421,15 @@ public sealed class BcsTokenManagerTests
         await requestEntered.Task.WaitAsync(AsyncGuardTimeout);
 
         callerCts.Cancel();
-        await authCancellationObserved.Task.WaitAsync(AsyncGuardTimeout);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refreshTask.WaitAsync(AsyncGuardTimeout));
+        callerCancelled.SetResult();
+        await refreshTask.WaitAsync(AsyncGuardTimeout);
         var current = await manager.GetCurrentTokenSetAsync();
 
         Assert.Equal(1, handler.RequestCount);
-        Assert.Null(current);
+        Assert.False(authCancellationObserved.Task.IsCompleted);
+        Assert.NotNull(current);
+        Assert.Equal("access-2", current.AccessToken);
+        Assert.Equal("current-refresh-2", current.RefreshToken);
     }
 
     [Fact]

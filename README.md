@@ -44,6 +44,8 @@ Content-Type: application/x-www-form-urlencoded
 `BcsInvestApiSettings.AuthUrl` must be an absolute HTTPS URI. Plain HTTP is rejected by default because the SDK sends
 refresh tokens to this endpoint. For local HTTP-only tests, set `AllowInsecureHttpForTesting = true` explicitly.
 
+API endpoints are built relative to `BcsInvestApiSettings.BaseUrl`, which defaults to `https://be.broker.ru`.
+
 Form fields:
 
 | Field | Value |
@@ -59,7 +61,8 @@ Form fields:
 | `RefreshToken` | required | Stable external refresh/bootstrap secret supplied by the host/application layer. |
 | `ClientId` | `trade-api-read` | BCS auth client id: `trade-api-read` or `trade-api-write`. |
 | `AuthUrl` | BCS token endpoint | Full Keycloak token endpoint URL. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
-| `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP auth URLs only for explicit local tests. |
+| `BaseUrl` | `https://be.broker.ru` | Base URL for BCS HTTP API endpoints. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
+| `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP URLs only for explicit local tests. |
 | `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
 | `HttpRetryAttempts` | `3` | Retry attempts for idempotent read/query HTTP calls after the initial request. |
 | `HttpRetryBaseDelay` | `250ms` | Base delay for exponential retry backoff. |

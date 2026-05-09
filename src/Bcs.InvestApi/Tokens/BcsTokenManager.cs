@@ -290,9 +290,6 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         cancellationToken.ThrowIfCancellationRequested();
 
         using var refreshOperationCts = new CancellationTokenSource(_settings.TokenRefreshOperationTimeout);
-        using var linkedRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            refreshOperationCts.Token);
 
         var response = await _authService.GetAccessTokenAsync(
             new BcsAuthRequest
@@ -301,7 +298,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
                 RefreshToken = refreshToken,
                 GrantType = BcsGrantTypes.RefreshToken,
             },
-            linkedRefreshCts.Token).ConfigureAwait(false);
+            refreshOperationCts.Token).ConfigureAwait(false);
 
         var tokenSet = BcsTokenSet.FromAuthResponse(response, _clock.UtcNow);
         Volatile.Write(ref _currentTokenSet, tokenSet);
