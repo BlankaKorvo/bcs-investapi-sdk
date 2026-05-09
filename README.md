@@ -78,6 +78,9 @@ Form fields:
 - After successful authorization it updates the in-memory token pair.
 - Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and not expired.
 - If the in-memory refresh token is missing or expired, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
+- If the in-memory refresh token is rejected with `invalid_grant`, refresh clears the in-memory token pair and retries
+  once with `BcsInvestApiSettings.RefreshToken` when it is a different token.
+- If `BcsInvestApiSettings.RefreshToken` is rejected with `invalid_grant`, the `BcsAuthException` is propagated.
 - `GetAccessTokenAsync()` returns the in-memory access token while it is valid under `TokenRefreshSkew`.
 - If the access token expires soon, it calls the auth endpoint under a `SemaphoreSlim` refresh gate.
 - Concurrent callers re-check the in-memory token after entering the refresh gate.
@@ -184,9 +187,10 @@ finally
 ```
 
 The auto-refresh loop uses the same lazy check and does not call the auth endpoint on every timer tick while the current
-access token is still usable. If BCS returns `invalid_grant`, the loop stops and the failure is available through
-`LastAutoRefreshException` and `AutoRefreshFailed`. Other refresh failures are reported through the same APIs and the
-loop keeps running.
+access token is still usable. If BCS rejects the in-memory refresh token with `invalid_grant`, the manager clears it and
+tries the configured bootstrap refresh token once. If the bootstrap refresh token is rejected with `invalid_grant`, the
+loop stops and the failure is available through `LastAutoRefreshException` and `AutoRefreshFailed`. Other refresh
+failures are reported through the same APIs and the loop keeps running.
 
 ## Low-Level Raw Auth Usage
 

@@ -247,8 +247,32 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
 
     private async ValueTask<BcsTokenSet> RefreshCoreAsync(CancellationToken cancellationToken)
     {
-        var refreshToken = ResolveRefreshTokenForRefresh(_clock.UtcNow);
+        var resolvedRefreshToken = ResolveRefreshTokenForRefresh(_clock.UtcNow);
 
+        try
+        {
+            return await ExchangeRefreshTokenAsync(resolvedRefreshToken.RefreshToken, cancellationToken).ConfigureAwait(false);
+        }
+        catch (BcsAuthException ex) when (
+            resolvedRefreshToken.Source == RefreshTokenSource.CurrentTokenSet &&
+            IsInvalidGrant(ex))
+        {
+            Volatile.Write(ref _currentTokenSet, null);
+
+            var settingsRefreshToken = _settings.GetRequiredRefreshToken();
+            if (string.Equals(settingsRefreshToken, resolvedRefreshToken.RefreshToken, StringComparison.Ordinal))
+            {
+                throw;
+            }
+
+            return await ExchangeRefreshTokenAsync(settingsRefreshToken, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async ValueTask<BcsTokenSet> ExchangeRefreshTokenAsync(
+        string refreshToken,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
 
         using var refreshOperationCts = new CancellationTokenSource(_settings.TokenRefreshOperationTimeout);
@@ -271,19 +295,22 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
         return tokenSet;
     }
 
-    private string ResolveRefreshTokenForRefresh(DateTimeOffset nowUtc)
+    private ResolvedRefreshToken ResolveRefreshTokenForRefresh(DateTimeOffset nowUtc)
     {
         var current = GetCurrentTokenSetOrNull();
         if (current?.HasUsableRefreshToken(nowUtc) == true)
         {
-            return current.RefreshToken;
+            return new ResolvedRefreshToken(current.RefreshToken, RefreshTokenSource.CurrentTokenSet);
         }
 
-        return _settings.GetRequiredRefreshToken();
+        return new ResolvedRefreshToken(_settings.GetRequiredRefreshToken(), RefreshTokenSource.Settings);
     }
 
     private BcsTokenSet? GetCurrentTokenSetOrNull() =>
         Volatile.Read(ref _currentTokenSet);
+
+    private static bool IsInvalidGrant(BcsAuthException exception) =>
+        string.Equals(exception.Error, "invalid_grant", StringComparison.Ordinal);
 
     private static BcsInvestApiSettings GetSettings(IOptions<BcsInvestApiSettings> options)
     {
@@ -294,5 +321,15 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private readonly record struct ResolvedRefreshToken(
+        string RefreshToken,
+        RefreshTokenSource Source);
+
+    private enum RefreshTokenSource
+    {
+        Settings,
+        CurrentTokenSet,
     }
 }

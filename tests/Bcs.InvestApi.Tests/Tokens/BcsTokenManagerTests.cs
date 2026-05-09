@@ -130,6 +130,79 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenReturnsInvalidGrant_FallsBackOnceToSettingsRefreshToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var requestedRefreshTokens = new List<string>();
+        var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            var refreshToken = await ReadRefreshTokenAsync(request, cancellationToken);
+            requestedRefreshTokens.Add(refreshToken);
+
+            return refreshToken == "runtime-refresh-1"
+                ? JsonResponse(HttpStatusCode.BadRequest, InvalidGrantJson("Runtime refresh token was revoked."))
+                : JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"));
+        });
+        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
+        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1"));
+
+        var accessToken = await manager.GetAccessTokenAsync();
+        var current = await manager.GetCurrentTokenSetAsync();
+
+        Assert.Equal("access-2", accessToken);
+        Assert.Equal("current-refresh-2", current?.RefreshToken);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(new[] { "runtime-refresh-1", "settings-refresh-1" }, requestedRefreshTokens);
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenFallbackSettingsRefreshTokenReturnsInvalidGrant_ThrowsAndClearsCurrentToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var requestedRefreshTokens = new List<string>();
+        var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            var refreshToken = await ReadRefreshTokenAsync(request, cancellationToken);
+            requestedRefreshTokens.Add(refreshToken);
+
+            return JsonResponse(
+                HttpStatusCode.BadRequest,
+                InvalidGrantJson(refreshToken == "settings-refresh-1"
+                    ? "Bootstrap refresh token was rejected."
+                    : "Runtime refresh token was revoked."));
+        });
+        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
+        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1"));
+
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var current = await manager.GetCurrentTokenSetAsync();
+
+        Assert.Equal("invalid_grant", exception.Error);
+        Assert.Equal("Bootstrap refresh token was rejected.", exception.ErrorDescription);
+        Assert.Null(current);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(new[] { "runtime-refresh-1", "settings-refresh-1" }, requestedRefreshTokens);
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenMatchesSettingsAndReturnsInvalidGrant_DoesNotRetrySameToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.BadRequest, InvalidGrantJson("Bootstrap refresh token was rejected."))));
+        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
+        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "settings-refresh-1"));
+
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var current = await manager.GetCurrentTokenSetAsync();
+
+        Assert.Equal("invalid_grant", exception.Error);
+        Assert.Null(current);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenIsEmpty_UsesSettingsRefreshToken()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
@@ -524,6 +597,33 @@ public sealed class BcsTokenManagerTests
         field.SetValue(manager, tokenSet);
     }
 
+    private static BcsTokenSet CreateTokenSet(DateTimeOffset nowUtc, string accessToken, string refreshToken) =>
+        new()
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken,
+            TokenType = "bearer",
+            ExpiresIn = 60,
+            RefreshExpiresIn = 7776000,
+            AccessTokenExpiresAtUtc = nowUtc.AddMinutes(1),
+            RefreshTokenExpiresAtUtc = nowUtc.AddDays(90),
+            ReceivedAtUtc = nowUtc.AddMinutes(-1),
+            Scope = "trade-api-read",
+            SessionState = "session-state-1",
+        };
+
+    private static async Task<string> ReadRefreshTokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var content = request.Content is null
+            ? string.Empty
+            : await request.Content.ReadAsStringAsync(cancellationToken);
+        var refreshTokenValue = content
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Single(value => value.StartsWith("refresh_token=", StringComparison.Ordinal));
+
+        return WebUtility.UrlDecode(refreshTokenValue["refresh_token=".Length..]) ?? string.Empty;
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTimeOffset.UtcNow.Add(timeout);
@@ -561,6 +661,14 @@ public sealed class BcsTokenManagerTests
           "not-before-policy": "0",
           "session_state": "session-state-1",
           "scope": "trade-api-read"
+        }
+        """;
+
+    private static string InvalidGrantJson(string errorDescription) =>
+        $$"""
+        {
+          "error": "invalid_grant",
+          "error_description": "{{errorDescription}}"
         }
         """;
 
