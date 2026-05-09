@@ -74,9 +74,9 @@ public sealed record BcsTokenSet
         return nowUtc.Add(refreshSkew) >= RefreshTokenExpiresAtUtc;
     }
 
-    internal bool HasUsableRefreshToken(DateTimeOffset nowUtc) =>
+    internal bool HasUsableRefreshToken(DateTimeOffset nowUtc, TimeSpan refreshSkew) =>
         !string.IsNullOrWhiteSpace(RefreshToken) &&
-        !IsRefreshTokenExpired(nowUtc, TimeSpan.Zero);
+        !IsRefreshTokenExpired(nowUtc, refreshSkew);
 
     internal static BcsTokenSet FromAuthResponse(BcsAuthResponse response, DateTimeOffset receivedAtUtc)
     {

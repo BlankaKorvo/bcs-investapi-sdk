@@ -298,7 +298,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     private ResolvedRefreshToken ResolveRefreshTokenForRefresh(DateTimeOffset nowUtc)
     {
         var current = GetCurrentTokenSetOrNull();
-        if (current?.HasUsableRefreshToken(nowUtc) == true)
+        if (current?.HasUsableRefreshToken(nowUtc, _settings.TokenRefreshSkew) == true)
         {
             return new ResolvedRefreshToken(current.RefreshToken, RefreshTokenSource.CurrentTokenSet);
         }

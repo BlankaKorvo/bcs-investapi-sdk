@@ -76,8 +76,8 @@ Form fields:
 - Construction, factory creation and DI resolution validate settings and require `BcsInvestApiSettings.RefreshToken`.
 - On first token request it uses `BcsInvestApiSettings.RefreshToken`.
 - After successful authorization it updates the in-memory token pair.
-- Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and not expired.
-- If the in-memory refresh token is missing or expired, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
+- Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and valid under `TokenRefreshSkew`.
+- If the in-memory refresh token is missing or expires within `TokenRefreshSkew`, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
 - If the in-memory refresh token is rejected with `invalid_grant`, refresh clears the in-memory token pair and retries
   once with `BcsInvestApiSettings.RefreshToken` when it is a different token.
 - If `BcsInvestApiSettings.RefreshToken` is rejected with `invalid_grant`, the `BcsAuthException` is propagated.

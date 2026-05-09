@@ -130,6 +130,30 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenExpiresWithinSkew_UsesSettingsRefreshToken()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"))));
+        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
+        SetCurrentTokenSet(
+            manager,
+            CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1") with
+            {
+                AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
+                RefreshTokenExpiresAtUtc = clock.UtcNow.AddMinutes(4),
+            });
+
+        var accessToken = await manager.GetAccessTokenAsync();
+        var current = await manager.GetCurrentTokenSetAsync();
+
+        Assert.Equal("access-2", accessToken);
+        Assert.Equal("current-refresh-2", current?.RefreshToken);
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenReturnsInvalidGrant_FallsBackOnceToSettingsRefreshToken()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
