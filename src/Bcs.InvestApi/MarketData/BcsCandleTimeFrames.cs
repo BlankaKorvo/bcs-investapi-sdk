@@ -11,18 +11,4 @@ public static class BcsCandleTimeFrames
     public const string Day = "D";
     public const string Week = "W";
     public const string Month = "MN";
-
-    internal static TimeSpan? GetFixedDuration(string timeFrame) =>
-        timeFrame switch
-        {
-            Minute1 => TimeSpan.FromMinutes(1),
-            Minute5 => TimeSpan.FromMinutes(5),
-            Minute15 => TimeSpan.FromMinutes(15),
-            Minute30 => TimeSpan.FromMinutes(30),
-            Hour1 => TimeSpan.FromHours(1),
-            Hour4 => TimeSpan.FromHours(4),
-            Day => TimeSpan.FromDays(1),
-            Week => TimeSpan.FromDays(7),
-            _ => null,
-        };
 }

@@ -9,7 +9,6 @@ using Bcs.InvestApi.Tokens;
 internal sealed class BcsMarketDataService
 {
     private const string CandlesPath = "trade-api-market-data-connector/api/v1/candles-chart";
-    private const int MaxCandlesPerRequest = 1440;
 
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
@@ -63,7 +62,7 @@ internal sealed class BcsMarketDataService
         ArgumentException.ThrowIfNullOrEmpty(classCode);
         ArgumentException.ThrowIfNullOrEmpty(ticker);
         ArgumentException.ThrowIfNullOrEmpty(timeFrame);
-        ValidateDateRange(startDate, endDate, timeFrame);
+        ValidateDateRange(startDate, endDate);
 
         var httpClient = _httpClientFactory();
 
@@ -149,69 +148,16 @@ internal sealed class BcsMarketDataService
 
     private static void ValidateDateRange(
         DateTimeOffset startDate,
-        DateTimeOffset endDate,
-        string timeFrame)
+        DateTimeOffset endDate)
     {
-        var duration = endDate - startDate;
-        if (duration <= TimeSpan.Zero)
+        if (endDate <= startDate)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(endDate),
                 endDate,
                 "End date must be greater than start date.");
         }
-
-        var requestedCandles = CountCandlesIfKnown(startDate, endDate, duration, timeFrame);
-        if (requestedCandles is null)
-        {
-            return;
-        }
-
-        if (requestedCandles > MaxCandlesPerRequest)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(endDate),
-                endDate,
-                $"Requested interval contains {requestedCandles} candles for time frame {timeFrame}; maximum is {MaxCandlesPerRequest}.");
-        }
     }
-
-    private static long? CountCandlesIfKnown(
-        DateTimeOffset startDate,
-        DateTimeOffset endDate,
-        TimeSpan duration,
-        string timeFrame)
-    {
-        if (string.Equals(timeFrame, BcsCandleTimeFrames.Month, StringComparison.Ordinal))
-        {
-            return CountMonthCandles(startDate, endDate);
-        }
-
-        var frameDuration = BcsCandleTimeFrames.GetFixedDuration(timeFrame);
-        if (frameDuration is null)
-        {
-            return null;
-        }
-
-        return CountCeiling(duration.Ticks, frameDuration.Value.Ticks);
-    }
-
-    private static long CountMonthCandles(DateTimeOffset startDate, DateTimeOffset endDate)
-    {
-        var start = startDate.UtcDateTime;
-        var end = endDate.UtcDateTime;
-        var months = ((end.Year - start.Year) * 12) + end.Month - start.Month;
-
-        if (start.AddMonths(months) < end)
-        {
-            months++;
-        }
-
-        return Math.Max(1, months);
-    }
-
-    private static long CountCeiling(long value, long divisor) =>
-        ((value - 1) / divisor) + 1;
 
     private static string FormatQueryDate(DateTimeOffset value) =>
         value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);

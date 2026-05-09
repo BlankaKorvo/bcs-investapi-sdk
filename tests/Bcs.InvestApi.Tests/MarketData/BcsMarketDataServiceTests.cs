@@ -155,7 +155,7 @@ public sealed class BcsMarketDataServiceTests
     }
 
     [Fact]
-    public async Task GetCandlesAsync_WithMoreThanMaxFixedFrameCandles_ThrowsBeforeRequest()
+    public async Task GetCandlesAsync_WithLargeFixedFrameRange_SendsRequest()
     {
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
@@ -165,19 +165,18 @@ public sealed class BcsMarketDataServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetCandlesAsync(
-                "TQBR",
-                "SBER",
-                new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2025, 11, 15, 7, 1, 0, TimeSpan.Zero),
-                BcsCandleTimeFrames.Minute1));
+        await service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 11, 15, 7, 1, 0, TimeSpan.Zero),
+            BcsCandleTimeFrames.Minute1);
 
-        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(1, handler.RequestCount);
     }
 
     [Fact]
-    public async Task GetCandlesAsync_WithMoreThanMaxMonthCandles_ThrowsBeforeRequest()
+    public async Task GetCandlesAsync_WithLargeMonthRange_SendsRequest()
     {
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
@@ -188,15 +187,14 @@ public sealed class BcsMarketDataServiceTests
             new BcsHttpRequestSender());
         var startDate = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetCandlesAsync(
-                "TQBR",
-                "SBER",
-                startDate,
-                startDate.AddMonths(1441),
-                BcsCandleTimeFrames.Month));
+        await service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            startDate,
+            startDate.AddMonths(1441),
+            BcsCandleTimeFrames.Month);
 
-        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(1, handler.RequestCount);
     }
 
     private static BcsMarketDataService CreateService() =>
