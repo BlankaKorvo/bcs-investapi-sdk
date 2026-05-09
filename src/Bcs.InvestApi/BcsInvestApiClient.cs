@@ -10,10 +10,10 @@ using Bcs.InvestApi.TradingSchedule;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
-/// Exposes in-memory token refresh management without exposing rotated runtime refresh tokens.
 /// </summary>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
+    private readonly BcsTokenManager _tokens;
     private readonly BcsLimitsService _limits;
     private readonly BcsPortfolioService _portfolio;
     private readonly BcsTradingScheduleService _tradingSchedule;
@@ -56,7 +56,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         IDisposable? ownedTransport)
     {
         Auth = auth ?? throw new ArgumentNullException(nameof(auth));
-        Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
+        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _limits = limits ?? throw new ArgumentNullException(nameof(limits));
         _portfolio = portfolio ?? throw new ArgumentNullException(nameof(portfolio));
         _tradingSchedule = tradingSchedule ?? throw new ArgumentNullException(nameof(tradingSchedule));
@@ -67,8 +67,6 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     }
 
     internal BcsAuthService Auth { get; }
-
-    public BcsTokenManager Tokens { get; }
 
     public Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default)
     {
@@ -179,7 +177,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 
         if (_ownsTokenManager)
         {
-            Tokens.Dispose();
+            _tokens.Dispose();
         }
 
         _ownedTransport?.Dispose();
@@ -196,7 +194,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 
         if (_ownsTokenManager)
         {
-            await Tokens.DisposeAsync().ConfigureAwait(false);
+            await _tokens.DisposeAsync().ConfigureAwait(false);
         }
 
         _ownedTransport?.Dispose();

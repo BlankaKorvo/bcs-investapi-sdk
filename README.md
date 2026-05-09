@@ -16,9 +16,7 @@ net10.0
 - Authorization by stable external refresh/bootstrap secret.
 - Runtime access/refresh token cache in memory.
 - Lazy refresh before token expiration.
-- Optional auto-refresh loop.
-- DI integration with singleton `BcsTokenManager`.
-- `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
+- Internal token manager that authorizes SDK requests automatically.
 - Typed `BcsAuthException` for non-success auth responses.
 - Typed limits, portfolio, daily trading schedule, instruments-by-ISIN, instruments-by-ticker, instruments-by-type,
   and historical candles endpoints.
@@ -30,7 +28,7 @@ when the client is created or resolved from DI.
 
 - The SDK does not own the long-term secret.
 - The SDK does not write tokens to disk.
-- Runtime `access_token` and rotated `refresh_token` values are stored only in `BcsTokenManager` memory.
+- Runtime `access_token` and rotated `refresh_token` values are stored only in SDK memory.
 - If the process exits or crashes, in-memory token state is lost.
 - A new process must receive the same stable secret again from the upper layer.
 - If a persistent secret store is required, implement it in the host/application layer, not in SDK core.
@@ -66,28 +64,23 @@ Form fields:
 | `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP URLs only for explicit local tests. |
 | `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
 | `TokenRefreshSkew` | `5 minutes` | Refresh access token before its actual expiration. |
-| `AutoRefreshInterval` | `1 minute` | Timer tick interval for the optional auto-refresh loop. |
 | `TokenRefreshOperationTimeout` | `60 seconds` | Maximum time allowed for one refresh-token auth exchange. |
 
-## Token Manager Behavior
+## Authorization Behavior
 
-`BcsTokenManager` keeps the runtime token pair in a private in-memory field:
+The SDK keeps the runtime token pair in private in-memory state:
 
 - Construction, factory creation and DI resolution validate settings and require `BcsInvestApiSettings.RefreshToken`.
-- On first token request it uses `BcsInvestApiSettings.RefreshToken`.
+- Before each broker API request, the SDK obtains a usable access token internally.
+- On the first authorized request it uses `BcsInvestApiSettings.RefreshToken`.
 - After successful authorization it updates the in-memory token pair.
 - Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and valid under `TokenRefreshSkew`.
 - If the in-memory refresh token is missing or expires within `TokenRefreshSkew`, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
 - If the in-memory refresh token is rejected with `invalid_grant`, refresh clears the in-memory token pair and falls
   back once to `BcsInvestApiSettings.RefreshToken` when it is a different token.
 - If `BcsInvestApiSettings.RefreshToken` is rejected with `invalid_grant`, the `BcsAuthException` is propagated.
-- `GetAccessTokenAsync()` returns the in-memory access token while it is valid under `TokenRefreshSkew`.
-- If the access token expires soon, it calls the auth endpoint under a `SemaphoreSlim` refresh gate.
+- If the access token expires soon, the next broker API request calls the auth endpoint under a refresh gate.
 - Concurrent callers re-check the in-memory token after entering the refresh gate.
-- `GetAccessTokenInfoAsync()` and `GetCurrentAccessTokenInfoAsync()` return safe access-token metadata without the
-  runtime `refresh_token`.
-- `RefreshAsync()` always calls the auth endpoint and returns safe access-token metadata without the runtime
-  `refresh_token`.
 
 ## Usage Examples
 
@@ -106,7 +99,6 @@ await using var client = BcsInvestApiClientFactory.Create(
     refreshToken: refreshToken,
     clientId: BcsAuthClientIds.TradeApiRead);
 
-var accessToken = await client.Tokens.GetAccessTokenAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
 var instruments = await client.GetInstrumentsByIsinsAsync(
     new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" });
@@ -137,13 +129,14 @@ services.AddBcsInvestApiClient(settings =>
 });
 ```
 
-`AddBcsInvestApiClient` registers `BcsTokenManager` as a singleton and exposes it through `IBcsAccessTokenProvider`.
-The provider interface intentionally exposes only `GetAccessTokenAsync()` so upper layers cannot accidentally log or
-persist the runtime rotated `refresh_token`.
+`AddBcsInvestApiClient` registers the facade and internal token services. Callers inject the facade and use broker API
+methods; access-token lifecycle is handled by the SDK.
 
 Inject the facade:
 
 ```csharp
+using Bcs.InvestApi.Portfolio;
+
 public sealed class MyService
 {
     private readonly BcsInvestApiClient _client;
@@ -153,8 +146,8 @@ public sealed class MyService
         _client = client;
     }
 
-    public Task<string> GetAccessTokenAsync(CancellationToken ct) =>
-        _client.Tokens.GetAccessTokenAsync(ct).AsTask();
+    public Task<IReadOnlyList<BcsPortfolioPosition>> GetPortfolioAsync(CancellationToken ct) =>
+        _client.GetPortfolioAsync(ct);
 }
 ```
 
@@ -245,71 +238,12 @@ foreach (var bar in candles.Bars)
 
 BCS allows at most 1440 candles in one request. The SDK validates this before sending the request.
 
-Or inject the token provider abstraction:
-
-```csharp
-using Bcs.InvestApi.Tokens;
-
-public sealed class MyApiClient
-{
-    private readonly IBcsAccessTokenProvider _tokens;
-
-    public MyApiClient(IBcsAccessTokenProvider tokens)
-    {
-        _tokens = tokens;
-    }
-
-    public async Task<HttpRequestMessage> CreateRequestAsync(CancellationToken ct)
-    {
-        var accessToken = await _tokens.GetAccessTokenAsync(ct);
-        var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test");
-        request.Headers.Authorization = new("Bearer", accessToken);
-        return request;
-    }
-}
-```
-
-## Auto-Refresh
-
-Lazy refresh works without `StartAutoRefresh()`: `GetAccessTokenAsync()` refreshes the token when the current access
-token is near expiration.
-
-Use `StartAutoRefresh()` only when the host wants a background timer to check the current token before normal calls
-arrive:
-
-```csharp
-client.Tokens.AutoRefreshFailed += (_, args) =>
-{
-    Console.Error.WriteLine(args.Exception.Message);
-};
-
-client.Tokens.StartAutoRefresh();
-
-try
-{
-    var accessToken = await client.Tokens.GetAccessTokenAsync();
-}
-finally
-{
-    await client.Tokens.StopAutoRefreshAsync();
-}
-```
-
-The auto-refresh loop uses the same lazy check and does not call the auth endpoint on every timer tick while the current
-access token is still usable. If BCS rejects the in-memory refresh token with `invalid_grant`, the manager clears it and
-tries the configured bootstrap refresh token once. If the bootstrap refresh token is rejected with `invalid_grant`, the
-loop stops and the failure is available through `LastAutoRefreshException` and `AutoRefreshFailed`. Other refresh
-failures are reported through the same APIs and the loop keeps running.
-
 ## Raw Auth Boundary
 
-`BcsInvestApiClient` does not expose raw auth exchange APIs. Runtime rotated refresh tokens returned by BCS remain an
-internal `BcsTokenManager` detail and are not returned from the main facade. Callers should use only:
-
-- `IBcsAccessTokenProvider.GetAccessTokenAsync(...)`
-- `BcsTokenManager.GetAccessTokenAsync(...)`
-- `BcsTokenManager.GetAccessTokenInfoAsync(...)`
-- `BcsTokenManager.GetCurrentAccessTokenInfoAsync(...)`
+`BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs or access-token lifecycle controls.
+Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use only broker API methods
+such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
+`GetInstrumentsBy...Async(...)` and `GetCandlesAsync(...)`.
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make the refresh
 token exposure explicit in that API.
@@ -321,7 +255,7 @@ BCS `400 invalid_grant` response is exposed as `BcsAuthException`:
 ```csharp
 try
 {
-    var token = await client.Tokens.RefreshAsync();
+    var limits = await client.GetLimitsAsync();
 }
 catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 {

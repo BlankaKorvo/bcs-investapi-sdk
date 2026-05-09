@@ -14,12 +14,6 @@ await using var client = BcsInvestApiClientFactory.Create(
     refreshToken: refreshToken,
     clientId: BcsAuthClientIds.TradeApiRead);
 
-var accessToken = await client.Tokens.GetAccessTokenAsync();
-client.Tokens.StartAutoRefresh();
-
-Console.WriteLine($"AccessToken: {MaskToken(accessToken)}");
-Console.WriteLine($"AutoRefreshRunning: {client.Tokens.IsAutoRefreshRunning}");
-
 var limits = await client.GetLimitsAsync();
 Console.WriteLine($"Depo limits: {limits.DepoLimit.Count}");
 Console.WriteLine($"Future holdings: {limits.FutureHolding.Count}");
@@ -83,14 +77,14 @@ foreach (var interval in schedule.DailySchedule)
 }
 
 var candlesEnd = DateTimeOffset.UtcNow;
-var candlesStart = candlesEnd.AddDays(-45);
+var candlesStart = candlesEnd.AddDays(-1);
 var candles = await client.GetCandlesAsync(
     classCode,
     ticker,
     candlesStart,
     candlesEnd,
     BcsCandleTimeFrames.Minute1);
-Console.WriteLine($"H1 candles for {classCode}/{ticker}: {candles.Bars.Count}");
+Console.WriteLine($"Minute1 candles for {classCode}/{ticker}: {candles.Bars.Count}");
 
 foreach (var bar in candles.Bars.Take(10))
 {
@@ -98,24 +92,7 @@ foreach (var bar in candles.Bars.Take(10))
         $"  {bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
 }
 
-await client.Tokens.StopAutoRefreshAsync();
-
 return 0;
-
-static string MaskToken(string token)
-{
-    if (string.IsNullOrEmpty(token))
-    {
-        return "<empty>";
-    }
-
-    if (token.Length <= 12)
-    {
-        return $"{token[0]}***{token[^1]}";
-    }
-
-    return $"{token[..6]}...{token[^6..]}";
-}
 
 static string[] GetConfiguredIsins()
 {

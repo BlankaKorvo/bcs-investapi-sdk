@@ -28,18 +28,19 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public void IBcsAccessTokenProvider_PublicSurface_ExposesOnlyAccessToken()
+    public void IBcsAccessTokenProvider_InternalSurface_ExposesOnlyAccessToken()
     {
         var methodNames = typeof(IBcsAccessTokenProvider)
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Select(method => method.Name)
             .ToArray();
 
+        Assert.False(typeof(IBcsAccessTokenProvider).IsPublic);
         Assert.Equal(new[] { nameof(IBcsAccessTokenProvider.GetAccessTokenAsync) }, methodNames);
     }
 
     [Fact]
-    public void BcsAccessTokenInfo_PublicProperties_DoNotExposeRefreshTokenAndAreInitOnly()
+    public void BcsAccessTokenInfo_InternalProperties_DoNotExposeRefreshTokenAndAreInitOnly()
     {
         var publicPropertyNames = typeof(BcsAccessTokenInfo)
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -54,6 +55,7 @@ public sealed class BcsTokenManagerTests
             .Select(property => property.Name)
             .ToArray();
 
+        Assert.False(typeof(BcsAccessTokenInfo).IsPublic);
         Assert.DoesNotContain(nameof(BcsTokenSet.RefreshToken), publicPropertyNames);
         Assert.Empty(mutableProperties);
     }
@@ -65,7 +67,7 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public void BcsTokenManager_PublicSurface_DoesNotExposeRuntimeTokenSet()
+    public void BcsTokenManager_IsInternalAndDoesNotExposeRuntimeTokenSet()
     {
         var publicMethods = typeof(BcsTokenManager)
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
@@ -75,8 +77,15 @@ public sealed class BcsTokenManagerTests
             .Select(method => method.Name)
             .ToArray();
 
+        Assert.False(typeof(BcsTokenManager).IsPublic);
         Assert.DoesNotContain("GetTokenSetAsync", publicMethodNames);
         Assert.DoesNotContain("GetCurrentTokenSetAsync", publicMethodNames);
+        Assert.DoesNotContain("StartAutoRefresh", publicMethodNames);
+        Assert.DoesNotContain("StopAutoRefreshAsync", publicMethodNames);
+        Assert.DoesNotContain("add_AutoRefreshFailed", publicMethodNames);
+        Assert.DoesNotContain("remove_AutoRefreshFailed", publicMethodNames);
+        Assert.DoesNotContain("get_LastAutoRefreshException", publicMethodNames);
+        Assert.DoesNotContain("get_IsAutoRefreshRunning", publicMethodNames);
         Assert.DoesNotContain(publicMethods, method => ContainsRuntimeTokenSet(method.ReturnType));
     }
 
@@ -494,7 +503,6 @@ public sealed class BcsTokenManagerTests
             settings.ClientId = BcsAuthClientIds.TradeApiRead;
             settings.AuthUrl = new Uri("https://example.test/token");
             settings.TokenRefreshSkew = TimeSpan.FromMinutes(5);
-            settings.AutoRefreshInterval = TimeSpan.FromMilliseconds(50);
         });
         services.AddSingleton<IHttpClientFactory>(httpClientFactory);
 
@@ -506,7 +514,7 @@ public sealed class BcsTokenManagerTests
 
         Assert.Same(manager, secondManager);
         Assert.Same(manager, tokenProvider);
-        Assert.Same(manager, client.Tokens);
+        Assert.NotNull(client);
         Assert.Equal(0, httpClientFactory.CreateClientCallCount);
 
         var first = await manager.RefreshAsync();
@@ -528,78 +536,6 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task StartAutoRefresh_WhenFailureSubscriberThrows_KeepsRefreshLoopRunning()
-    {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
-        var failureObserved = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var successObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var attempt = 0;
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-        {
-            if (Interlocked.Increment(ref attempt) == 1)
-            {
-                throw new HttpRequestException("Temporary network failure.");
-            }
-
-            successObserved.TrySetResult();
-            return Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2")));
-        });
-        var manager = CreateManager(
-            handler,
-            clock,
-            refreshToken: "settings-refresh-1",
-            autoRefreshInterval: TimeSpan.FromMilliseconds(25));
-        manager.AutoRefreshFailed += (_, args) =>
-        {
-            failureObserved.TrySetResult(args.Exception);
-            throw new InvalidOperationException("Subscriber failure.");
-        };
-
-        manager.StartAutoRefresh();
-        var failure = await failureObserved.Task.WaitAsync(AsyncGuardTimeout);
-        Assert.IsType<HttpRequestException>(failure);
-        Assert.Same(failure, manager.LastAutoRefreshException);
-        Assert.True(manager.IsAutoRefreshRunning);
-
-        await successObserved.Task.WaitAsync(AsyncGuardTimeout);
-        await manager.StopAutoRefreshAsync();
-
-        Assert.Equal(2, handler.RequestCount);
-        Assert.Null(manager.LastAutoRefreshException);
-        Assert.False(manager.IsAutoRefreshRunning);
-    }
-
-    [Fact]
-    public async Task StartAutoRefresh_WhenAuthReturnsInvalidGrant_StopsRefreshLoop()
-    {
-        const string errorJson = """
-        {
-          "error": "invalid_grant",
-          "error_description": "Refresh token expired"
-        }
-        """;
-
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
-        var failureObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.BadRequest, errorJson)));
-        var manager = CreateManager(
-            handler,
-            clock,
-            refreshToken: "settings-refresh-1",
-            autoRefreshInterval: TimeSpan.FromMilliseconds(25));
-        manager.AutoRefreshFailed += (_, args) => failureObserved.TrySetResult();
-
-        manager.StartAutoRefresh();
-        await failureObserved.Task.WaitAsync(AsyncGuardTimeout);
-        await WaitUntilAsync(() => !manager.IsAutoRefreshRunning, TimeSpan.FromMilliseconds(200));
-
-        var exception = Assert.IsType<BcsAuthException>(manager.LastAutoRefreshException);
-        Assert.Equal("invalid_grant", exception.Error);
-        Assert.Equal(1, handler.RequestCount);
-        Assert.False(manager.IsAutoRefreshRunning);
-    }
-
-    [Fact]
     public void CreateFactory_WhenNoRefreshToken_ThrowsAtCreate()
     {
         var exception = Assert.Throws<InvalidOperationException>(() => BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
@@ -614,29 +550,53 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task CreateFactory_WithRefreshToken_CreatesClientWithoutFileStore()
+    public async Task CreateFactory_WithRefreshToken_AuthorizesBrokerRequestWithoutExposingTokens()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"))));
+        var authUrl = new Uri("https://example.test/token");
+        var limitsUrl = new Uri("https://example.test/trade-api-bff-limit/api/v1/limits");
+        var authRequestCount = 0;
+        string? authRequestContent = null;
+        string? limitsAccessToken = null;
+        var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri == authUrl)
+            {
+                authRequestCount++;
+                authRequestContent = request.Content is null
+                    ? null
+                    : await request.Content.ReadAsStringAsync(cancellationToken);
+
+                return JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"));
+            }
+
+            if (request.RequestUri == limitsUrl)
+            {
+                limitsAccessToken = request.Headers.Authorization?.Parameter;
+                return JsonResponse(HttpStatusCode.OK, "{}");
+            }
+
+            throw new InvalidOperationException($"Unexpected request URI '{request.RequestUri}'.");
+        });
 
         await using var client = BcsInvestApiClientFactory.Create(
             new BcsInvestApiSettings
             {
                 RefreshToken = "settings-refresh-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
-                AuthUrl = new Uri("https://example.test/token"),
+                AuthUrl = authUrl,
+                BaseUrl = new Uri("https://example.test"),
             },
             handler,
             clock);
 
-        var accessToken = await client.Tokens.GetAccessTokenAsync();
-        var current = await client.Tokens.GetCurrentTokenSetAsync();
+        var limits = await client.GetLimitsAsync();
 
-        Assert.Equal("access-1", accessToken);
-        Assert.Equal("current-refresh-2", current?.RefreshToken);
-        Assert.Equal(1, handler.RequestCount);
-        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+        Assert.Empty(limits.DepoLimit);
+        Assert.Equal("access-1", limitsAccessToken);
+        Assert.Equal(1, authRequestCount);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", authRequestContent);
     }
 
     private static bool ContainsRuntimeTokenSet(Type type) =>
@@ -647,8 +607,7 @@ public sealed class BcsTokenManagerTests
         CapturingHttpMessageHandler handler,
         FakeBcsClock clock,
         string? refreshToken,
-        TimeSpan? tokenRefreshOperationTimeout = null,
-        TimeSpan? autoRefreshInterval = null)
+        TimeSpan? tokenRefreshOperationTimeout = null)
     {
         var settings = new BcsInvestApiSettings
         {
@@ -656,7 +615,6 @@ public sealed class BcsTokenManagerTests
             ClientId = BcsAuthClientIds.TradeApiRead,
             AuthUrl = new Uri("https://example.test/token"),
             TokenRefreshSkew = TimeSpan.FromMinutes(5),
-            AutoRefreshInterval = autoRefreshInterval ?? TimeSpan.FromMilliseconds(50),
             TokenRefreshOperationTimeout = tokenRefreshOperationTimeout ?? TimeSpan.FromSeconds(60),
         };
 
@@ -697,22 +655,6 @@ public sealed class BcsTokenManagerTests
             .Single(value => value.StartsWith("refresh_token=", StringComparison.Ordinal));
 
         return WebUtility.UrlDecode(refreshTokenValue["refresh_token=".Length..]) ?? string.Empty;
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
-    {
-        var deadline = DateTimeOffset.UtcNow.Add(timeout);
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            if (condition())
-            {
-                return;
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(10));
-        }
-
-        Assert.True(condition(), "Condition was not met before timeout.");
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

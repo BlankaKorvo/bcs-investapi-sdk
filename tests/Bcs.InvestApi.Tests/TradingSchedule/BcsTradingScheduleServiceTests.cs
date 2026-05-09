@@ -48,7 +48,7 @@ public sealed class BcsTradingScheduleServiceTests
     }
 
     [Fact]
-    public async Task GetDailyTradingScheduleAsync_NotFoundWithEmptyDailyScheduleLine_ReturnsEmptyNonWorkDaySchedule()
+    public async Task GetDailyTradingScheduleAsync_NotFoundWithEmptyDailyScheduleLine_ThrowsBcsApiException()
     {
         const string errorJson = """
         {
@@ -69,10 +69,11 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var schedule = await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
+            service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
 
-        Assert.False(schedule.IsWorkDay);
-        Assert.Empty(schedule.DailySchedule);
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.Equal(errorJson, exception.ResponseBody);
         Assert.Equal(1, handler.RequestCount);
     }
 

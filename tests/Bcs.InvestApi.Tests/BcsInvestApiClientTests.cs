@@ -2,6 +2,7 @@ namespace Bcs.InvestApi.Tests;
 
 using System.Reflection;
 using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.Tokens;
 using Xunit;
 
 public sealed class BcsInvestApiClientTests
@@ -14,7 +15,7 @@ public sealed class BcsInvestApiClientTests
         var publicConstructors = typeof(BcsInvestApiClient)
             .GetConstructors(BindingFlags.Instance | BindingFlags.Public);
 
-        Assert.Equal(new[] { nameof(BcsInvestApiClient.Tokens) }, publicProperties.Select(property => property.Name));
+        Assert.Empty(publicProperties);
         Assert.Null(typeof(BcsInvestApiClient).GetProperty("Auth", BindingFlags.Instance | BindingFlags.Public));
         Assert.DoesNotContain(publicProperties, property => property.PropertyType == typeof(BcsAuthService));
         Assert.DoesNotContain(
@@ -29,5 +30,13 @@ public sealed class BcsInvestApiClientTests
         Assert.False(typeof(BcsAuthRequest).IsPublic);
         Assert.False(typeof(BcsAuthResponse).IsPublic);
         Assert.False(typeof(BcsAuthErrorResponse).IsPublic);
+    }
+
+    [Fact]
+    public void TokenTypes_AreInternalImplementationDetails()
+    {
+        Assert.False(typeof(BcsTokenManager).IsPublic);
+        Assert.False(typeof(IBcsAccessTokenProvider).IsPublic);
+        Assert.False(typeof(BcsAccessTokenInfo).IsPublic);
     }
 }

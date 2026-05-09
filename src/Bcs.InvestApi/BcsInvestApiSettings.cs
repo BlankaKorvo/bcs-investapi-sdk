@@ -46,13 +46,6 @@ public sealed class BcsInvestApiSettings
     public TimeSpan TokenRefreshSkew { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Timer tick interval for automatic refresh. The timer checks whether refresh is required;
-    /// it does not call the auth endpoint on every tick if the current access token is still valid.
-    /// Default: 1 minute.
-    /// </summary>
-    public TimeSpan AutoRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
-
-    /// <summary>
     /// Maximum time allowed for one refresh-token auth exchange once refresh starts.
     /// Default: 60 seconds.
     /// </summary>
@@ -93,11 +86,6 @@ public sealed class BcsInvestApiSettings
         if (TokenRefreshSkew < TimeSpan.Zero)
         {
             throw new InvalidOperationException("BCS token refresh skew must be greater than or equal to zero.");
-        }
-
-        if (AutoRefreshInterval <= TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS auto-refresh interval must be greater than zero.");
         }
 
         if (TokenRefreshOperationTimeout <= TimeSpan.Zero)

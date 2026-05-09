@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
-public interface IBcsAccessTokenProvider
+internal interface IBcsAccessTokenProvider
 {
     ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
 }

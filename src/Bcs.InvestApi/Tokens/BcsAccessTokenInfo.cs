@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
-public sealed record BcsAccessTokenInfo
+internal sealed record BcsAccessTokenInfo
 {
     public required string AccessToken { get; init; }
 
