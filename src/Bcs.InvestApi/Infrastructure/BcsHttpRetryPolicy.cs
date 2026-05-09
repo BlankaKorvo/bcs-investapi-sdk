@@ -19,7 +19,7 @@ internal static class BcsHttpRetryPolicy
             BcsRequestSafety.NonIdempotentCommand =>
                 Policy.NoOpAsync<BcsHttpExchange>(),
             BcsRequestSafety.TokenRefresh =>
-                CreateRetrying(settings.AuthRetryAttempts, settings.HttpRetryBaseDelay),
+                Policy.NoOpAsync<BcsHttpExchange>(),
             _ => throw new ArgumentOutOfRangeException(nameof(safety), safety, null),
         };
     }

@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.Auth;
 
 using System.Text.Json.Serialization;
 
-public sealed record BcsAuthErrorResponse
+internal sealed record BcsAuthErrorResponse
 {
     [JsonPropertyName("error")]
     public string? Error { get; init; }

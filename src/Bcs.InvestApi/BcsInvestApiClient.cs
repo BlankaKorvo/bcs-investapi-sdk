@@ -5,7 +5,7 @@ using Bcs.InvestApi.Tokens;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
-/// Iteration 2 exposes raw authorization plus in-memory token refresh management.
+/// Exposes in-memory token refresh management without exposing rotated runtime refresh tokens.
 /// </summary>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
@@ -13,7 +13,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     private readonly IDisposable? _ownedTransport;
     private bool _disposed;
 
-    public BcsInvestApiClient(BcsAuthService auth, BcsTokenManager tokens)
+    internal BcsInvestApiClient(BcsAuthService auth, BcsTokenManager tokens)
         : this(auth, tokens, ownsTokenManager: false, ownedTransport: null)
     {
     }
@@ -30,7 +30,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         _ownedTransport = ownedTransport;
     }
 
-    public BcsAuthService Auth { get; }
+    internal BcsAuthService Auth { get; }
 
     public BcsTokenManager Tokens { get; }
 

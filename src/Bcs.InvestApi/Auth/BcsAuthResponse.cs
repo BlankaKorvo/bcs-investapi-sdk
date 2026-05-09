@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.Auth;
 
 using System.Text.Json.Serialization;
 
-public sealed record BcsAuthResponse
+internal sealed record BcsAuthResponse
 {
     [JsonPropertyName("access_token")]
     public string AccessToken { get; init; } = string.Empty;

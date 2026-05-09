@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Auth;
 
-public sealed record BcsAuthRequest
+internal sealed record BcsAuthRequest
 {
     public required string ClientId { get; init; }
 

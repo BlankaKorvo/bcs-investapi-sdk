@@ -33,12 +33,6 @@ public sealed class BcsInvestApiSettings
     public TimeSpan? Timeout { get; set; }
 
     /// <summary>
-    /// Maximum number of automatic retry attempts for auth refresh-token exchange after the initial request.
-    /// Default: 0. Refresh tokens rotate, so automatic retries are disabled by default.
-    /// </summary>
-    public int AuthRetryAttempts { get; set; } = 0;
-
-    /// <summary>
     /// Maximum number of HTTP retry attempts for idempotent read/query API requests after the initial request.
     /// Default: 3. Set to 0 to disable read/query retries.
     /// </summary>
@@ -90,11 +84,6 @@ public sealed class BcsInvestApiSettings
         if (Timeout is not null && Timeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
-        }
-
-        if (AuthRetryAttempts < 0)
-        {
-            throw new InvalidOperationException("BCS auth retry attempts must be greater than or equal to zero.");
         }
 
         if (HttpRetryAttempts < 0)

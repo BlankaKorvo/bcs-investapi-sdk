@@ -89,6 +89,8 @@ public static class BcsInvestApiClientExtensions
                 sp.GetRequiredService<IBcsClock>());
         });
         services.AddSingleton<IBcsAccessTokenProvider>(sp => sp.GetRequiredService<BcsTokenManager>());
-        services.AddSingleton<BcsInvestApiClient>();
+        services.AddSingleton(sp => new BcsInvestApiClient(
+            sp.GetRequiredService<BcsAuthService>(),
+            sp.GetRequiredService<BcsTokenManager>()));
     }
 }

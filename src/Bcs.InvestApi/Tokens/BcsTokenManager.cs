@@ -16,7 +16,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     private Task? _autoRefreshTask;
     private bool _disposed;
 
-    public BcsTokenManager(
+    internal BcsTokenManager(
         BcsAuthService authService,
         IOptions<BcsInvestApiSettings> options,
         IBcsClock clock)
@@ -24,7 +24,7 @@ public sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsy
     {
     }
 
-    public BcsTokenManager(
+    internal BcsTokenManager(
         BcsAuthService authService,
         BcsInvestApiSettings settings,
         IBcsClock? clock = null)

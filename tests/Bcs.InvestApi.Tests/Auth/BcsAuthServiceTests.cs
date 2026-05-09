@@ -49,24 +49,6 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
-    public void Constructor_WithNegativeAuthRetryAttempts_Throws()
-    {
-        var settings = new BcsInvestApiSettings
-        {
-            AuthUrl = new Uri("https://example.test/token"),
-            ClientId = BcsAuthClientIds.TradeApiRead,
-            AuthRetryAttempts = -1,
-        };
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            new BcsAuthService(
-                new HttpClient(new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())))),
-                settings));
-
-        Assert.Contains("auth retry attempts", exception.Message);
-    }
-
-    [Fact]
     public async Task GetAccessTokenAsync_WithHttpAuthUrlAndTestingOptIn_PostsForm()
     {
         var authUrl = new Uri("http://localhost/token");
@@ -148,36 +130,27 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_WhenAuthRetriesConfigured_RetriesWithFreshRequest()
+    public async Task GetAccessTokenAsync_WhenHttpRetriesConfigured_DoesNotRetryRefreshTokenExchange()
     {
-        var attempt = 0;
-        var observedRequests = new List<HttpRequestMessage>();
-        var handler = new CapturingHttpMessageHandler((request, _) =>
-        {
-            observedRequests.Add(request);
-
-            return Task.FromResult(++attempt < 3
-                ? JsonResponse(HttpStatusCode.InternalServerError, """{"error":"temporary"}""")
-                : JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson()));
-        });
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            throw new HttpRequestException("Connection reset after processing."));
         var service = CreateService(
             handler,
             configureSettings: settings =>
             {
-                settings.AuthRetryAttempts = 2;
+                settings.HttpRetryAttempts = 3;
                 settings.HttpRetryBaseDelay = TimeSpan.Zero;
             });
 
-        var response = await service.GetAccessTokenAsync(new BcsAuthRequest
-        {
-            RefreshToken = "refresh-token-1",
-            ClientId = BcsAuthClientIds.TradeApiRead,
-            GrantType = BcsGrantTypes.RefreshToken
-        });
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            service.GetAccessTokenAsync(new BcsAuthRequest
+            {
+                RefreshToken = "refresh-token-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                GrantType = BcsGrantTypes.RefreshToken
+            }));
 
-        Assert.Equal("access-token-1", response.AccessToken);
-        Assert.Equal(3, handler.RequestCount);
-        Assert.Equal(3, observedRequests.Distinct().Count());
+        Assert.Equal(1, handler.RequestCount);
     }
 
     [Fact]

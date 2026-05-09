@@ -353,6 +353,32 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenHttpRetriesConfigured_DoesNotRetryRefreshTokenExchange()
+    {
+        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            throw new HttpRequestException("Connection reset after processing."));
+        var settings = new BcsInvestApiSettings
+        {
+            RefreshToken = "settings-refresh-1",
+            ClientId = BcsAuthClientIds.TradeApiRead,
+            AuthUrl = new Uri("https://example.test/token"),
+            HttpRetryAttempts = 3,
+            HttpRetryBaseDelay = TimeSpan.Zero,
+            TokenRefreshSkew = TimeSpan.FromMinutes(5),
+            AutoRefreshInterval = TimeSpan.FromMilliseconds(50),
+            TokenRefreshOperationTimeout = TimeSpan.FromSeconds(60),
+        };
+        var auth = new BcsAuthService(new HttpClient(handler), settings);
+        var manager = new BcsTokenManager(auth, settings, clock);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => manager.RefreshAsync().AsTask());
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Contains("refresh_token=settings-refresh-1", handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenCancellationIsRequestedBeforeRefresh_DoesNotCallAuthEndpoint()
     {
         var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));

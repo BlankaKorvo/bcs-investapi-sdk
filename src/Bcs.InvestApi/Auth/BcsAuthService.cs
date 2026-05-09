@@ -5,19 +5,19 @@ using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
 using Microsoft.Extensions.Options;
 
-public sealed class BcsAuthService
+internal sealed class BcsAuthService
 {
     private readonly Func<HttpClient> _httpClientFactory;
     private readonly bool _disposeHttpClientAfterRequest;
     private readonly IBcsAuthHttpSender _requestSender;
     private readonly BcsInvestApiSettings _settings;
 
-    public BcsAuthService(HttpClient httpClient, IOptions<BcsInvestApiSettings> options)
+    internal BcsAuthService(HttpClient httpClient, IOptions<BcsInvestApiSettings> options)
         : this(httpClient, options.Value)
     {
     }
 
-    public BcsAuthService(HttpClient httpClient, BcsInvestApiSettings settings)
+    internal BcsAuthService(HttpClient httpClient, BcsInvestApiSettings settings)
         : this(() => httpClient, settings, disposeHttpClientAfterRequest: false)
     {
     }
@@ -57,7 +57,7 @@ public sealed class BcsAuthService
         _settings.ValidateTransportSettings();
     }
 
-    public async Task<BcsAuthResponse> GetAccessTokenAsync(
+    internal async Task<BcsAuthResponse> GetAccessTokenAsync(
         BcsAuthRequest authRequest,
         CancellationToken cancellationToken = default)
     {

@@ -18,10 +18,9 @@ net10.0
 - Lazy refresh before token expiration.
 - Optional auto-refresh loop.
 - DI integration with singleton `BcsTokenManager`.
-- Separate retry policy for auth and normal HTTP calls.
+- Retries only for idempotent read/query HTTP calls.
 - `IBcsAccessTokenProvider` abstraction for HTTP API clients; it exposes only the current access token.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw auth request/response DTOs.
 
 ## Architecture
 
@@ -62,7 +61,6 @@ Form fields:
 | `AuthUrl` | BCS token endpoint | Full Keycloak token endpoint URL. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
 | `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP auth URLs only for explicit local tests. |
 | `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
-| `AuthRetryAttempts` | `0` | Retry attempts for auth refresh-token exchange after the initial request. |
 | `HttpRetryAttempts` | `3` | Retry attempts for idempotent read/query HTTP calls after the initial request. |
 | `HttpRetryBaseDelay` | `250ms` | Base delay for exponential retry backoff. |
 | `TokenRefreshSkew` | `5 minutes` | Refresh access token before its actual expiration. |
@@ -197,39 +195,38 @@ tries the configured bootstrap refresh token once. If the bootstrap refresh toke
 loop stops and the failure is available through `LastAutoRefreshException` and `AutoRefreshFailed`. Other refresh
 failures are reported through the same APIs and the loop keeps running.
 
-## Low-Level Raw Auth Usage
+## Raw Auth Boundary
 
-`BcsAuthService` is available when the caller wants only one raw token exchange:
+`BcsInvestApiClient` does not expose raw auth exchange APIs. Runtime rotated refresh tokens returned by BCS remain an
+internal `BcsTokenManager` detail and are not returned from the main facade. Callers should use only:
 
-```csharp
-BcsAuthResponse response = await client.Auth.GetAccessTokenAsync(new BcsAuthRequest
-{
-    ClientId = BcsAuthClientIds.TradeApiWrite,
-    RefreshToken = "<refresh-token>",
-    GrantType = BcsGrantTypes.RefreshToken,
-});
-```
+- `IBcsAccessTokenProvider.GetAccessTokenAsync(...)`
+- `BcsTokenManager.GetAccessTokenAsync(...)`
+- `BcsTokenManager.GetAccessTokenInfoAsync(...)`
+- `BcsTokenManager.GetCurrentAccessTokenInfoAsync(...)`
+
+If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make the refresh
+token exposure explicit in that API.
 
 ## HTTP Retries
 
 The SDK keeps retry policy selection explicit:
 
-- Auth refresh-token exchange uses a dedicated sender with retries disabled by default. Refresh tokens rotate on
-  successful exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed
-  first request into a later `400 invalid_grant`.
+- Auth refresh-token exchange uses a dedicated sender with retries disabled. Refresh tokens rotate on successful
+  exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed first
+  request into a later `400 invalid_grant`.
 - Read/query requests use the read sender. This covers GET endpoints such as limits, portfolio, instruments and
   candles, plus POST endpoints that are documented as idempotent read queries.
 - Command requests use the command sender and are not retried by default.
 
 Defaults:
 
-- `AuthRetryAttempts = 0`
 - `HttpRetryAttempts = 3`
 - `HttpRetryBaseDelay = 250ms`
 - read/query exponential delays: 250ms, 500ms, 1000ms
 
-Keep `AuthRetryAttempts = 0` unless the caller has an external guarantee that retrying the refresh-token exchange is
-safe. Command/order retries must be opt-in at the client operation level, not inherited from the shared HTTP layer.
+Auth refresh-token exchange and command/order retries must not be inherited from the shared HTTP layer. If a future
+low-level auth retry API is needed, keep it separate and make the refresh-token rotation risk explicit.
 
 ## Error Handling
 
@@ -248,7 +245,7 @@ catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 
 ## HttpClient Ownership
 
-`BcsAuthService` does not implement `IDisposable` and does not dispose a `HttpClient` passed from outside.
+The internal auth transport does not dispose a `HttpClient` passed from outside.
 
 - In DI mode, `IHttpClientFactory` owns transport lifecycle.
 - In direct factory mode, `BcsInvestApiClientFactory` creates and disposes its own `HttpClient` when the facade is disposed.
