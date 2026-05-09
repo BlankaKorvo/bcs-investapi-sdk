@@ -7,8 +7,8 @@ public sealed class BcsInvestApiSettings
     public static readonly Uri DefaultAuthUrl = new("https://be.broker.ru/trade-api-keycloak/realms/tradeapi/protocol/openid-connect/token");
 
     /// <summary>
-    /// Initial refresh token received in the BCS Investments web application.
-    /// After the first refresh, the SDK uses the latest refresh_token from IBcsTokenStore.
+    /// Stable external bootstrap secret owned by the upper application layer.
+    /// The SDK keeps access_token and rotated refresh_token values received from auth only in memory.
     /// </summary>
     public string? RefreshToken { get; set; }
 
@@ -65,30 +65,9 @@ public sealed class BcsInvestApiSettings
 
     /// <summary>
     /// Maximum time allowed for one refresh-token auth exchange once refresh starts.
-    /// Token persistence after successful auth uses TokenPersistenceTimeout.
     /// Default: 60 seconds.
     /// </summary>
     public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    /// Maximum time allowed to persist tokens after a successful auth refresh.
-    /// User cancellation is intentionally ignored during this write so a rotated refresh token is not lost.
-    /// Default: 30 seconds.
-    /// </summary>
-    public TimeSpan TokenPersistenceTimeout { get; set; } = TimeSpan.FromSeconds(30);
-
-    /// <summary>
-    /// Maximum time allowed to acquire token storage lock during startup token source preflight.
-    /// Default: 10 seconds.
-    /// </summary>
-    public TimeSpan TokenStoreLockTimeout { get; set; } = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// Optional JSON file path for storing access_token and refresh_token.
-    /// If null or empty, the factory/DI registration uses in-memory token storage.
-    /// The file contains plaintext tokens; protect it with OS-level file permissions.
-    /// </summary>
-    public string? TokenStoragePath { get; set; }
 
     internal void ValidateTransportSettings()
     {
@@ -132,6 +111,7 @@ public sealed class BcsInvestApiSettings
     internal void ValidateTokenSettings()
     {
         ValidateTransportSettings();
+        _ = GetRequiredRefreshToken();
 
         if (TokenRefreshSkew < TimeSpan.Zero)
         {
@@ -147,23 +127,13 @@ public sealed class BcsInvestApiSettings
         {
             throw new InvalidOperationException("BCS token refresh operation timeout must be greater than zero.");
         }
-
-        if (TokenPersistenceTimeout <= TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS token persistence timeout must be greater than zero.");
-        }
-
-        if (TokenStoreLockTimeout <= TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS token store lock timeout must be greater than zero.");
-        }
     }
 
     internal string GetRequiredRefreshToken()
     {
         if (string.IsNullOrWhiteSpace(RefreshToken))
         {
-            throw new InvalidOperationException("BCS refresh token is not configured. Set Bcs:RefreshToken, configure TokenStoragePath with a saved refresh token, or pass refresh token explicitly to Auth.GetAccessTokenAsync(...).");
+            throw new InvalidOperationException("BCS refresh token is not configured. Set Bcs:RefreshToken or pass refresh token explicitly.");
         }
 
         return RefreshToken;

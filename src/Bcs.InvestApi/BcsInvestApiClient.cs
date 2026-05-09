@@ -5,7 +5,7 @@ using Bcs.InvestApi.Tokens;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
-/// Iteration 2 exposes raw authorization plus token storage/refresh management.
+/// Iteration 2 exposes raw authorization plus in-memory token refresh management.
 /// </summary>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {

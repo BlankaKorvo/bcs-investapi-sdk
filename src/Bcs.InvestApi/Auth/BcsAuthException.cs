@@ -9,7 +9,7 @@ public sealed class BcsAuthException : Exception
         string? error,
         string? errorDescription,
         string responseBody)
-        : base(BuildMessage(statusCode, error, errorDescription))
+        : base(BuildMessage(statusCode, error))
     {
         StatusCode = statusCode;
         Error = error;
@@ -25,18 +25,13 @@ public sealed class BcsAuthException : Exception
 
     public string ResponseBody { get; }
 
-    private static string BuildMessage(HttpStatusCode statusCode, string? error, string? errorDescription)
+    private static string BuildMessage(HttpStatusCode statusCode, string? error)
     {
         var message = $"BCS auth request failed. StatusCode={(int)statusCode} ({statusCode}).";
 
         if (!string.IsNullOrWhiteSpace(error))
         {
             message += $" Error='{error}'.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(errorDescription))
-        {
-            message += $" Description='{errorDescription}'.";
         }
 
         return message;

@@ -6,7 +6,7 @@ public interface IBcsAccessTokenProvider
 
     ValueTask<BcsTokenSet> GetTokenSetAsync(CancellationToken cancellationToken = default);
 
-    ValueTask<BcsTokenSet?> GetStoredTokenSetAsync(CancellationToken cancellationToken = default);
+    ValueTask<BcsTokenSet?> GetCurrentTokenSetAsync(CancellationToken cancellationToken = default);
 
     ValueTask<BcsTokenSet> RefreshAsync(CancellationToken cancellationToken = default);
 }

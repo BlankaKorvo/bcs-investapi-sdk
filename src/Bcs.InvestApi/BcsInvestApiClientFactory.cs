@@ -2,7 +2,6 @@ namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Time;
-using Bcs.InvestApi.Tokens;
 
 public static class BcsInvestApiClientFactory
 {
@@ -28,9 +27,7 @@ public static class BcsInvestApiClientFactory
     public static BcsInvestApiClient Create(
         BcsInvestApiSettings settings,
         HttpMessageHandler? httpMessageHandler = null,
-        IBcsTokenStore? tokenStore = null,
-        IBcsClock? clock = null,
-        IBcsTokenRefreshCoordinator? tokenRefreshCoordinator = null)
+        IBcsClock? clock = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTokenSettings();
@@ -41,16 +38,12 @@ public static class BcsInvestApiClientFactory
 
         BcsInvestApiClientComposition.ConfigureAuthHttpClient(settings, httpClient);
 
-        tokenStore ??= BcsInvestApiClientComposition.CreateTokenStore(settings);
-
         var requestSender = BcsInvestApiClientComposition.CreateAuthRequestSender(settings);
         var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient, requestSender);
         var tokens = BcsInvestApiClientComposition.CreateTokenManager(
             auth,
-            tokenStore,
             settings,
-            clock,
-            tokenRefreshCoordinator);
+            clock);
 
         return new BcsInvestApiClient(
             auth,

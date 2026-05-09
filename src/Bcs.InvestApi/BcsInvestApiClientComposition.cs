@@ -9,16 +9,6 @@ internal static class BcsInvestApiClientComposition
 {
     public const string AuthHttpClientName = "Bcs.InvestApi.Auth";
 
-    public static IBcsTokenStore CreateTokenStore(BcsInvestApiSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTokenSettings();
-
-        return string.IsNullOrWhiteSpace(settings.TokenStoragePath)
-            ? new BcsInMemoryTokenStore()
-            : new BcsFileTokenStore(settings.TokenStoragePath);
-    }
-
     public static void ConfigureAuthHttpClient(BcsInvestApiSettings settings, HttpClient httpClient)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -100,22 +90,15 @@ internal static class BcsInvestApiClientComposition
 
     public static BcsTokenManager CreateTokenManager(
         BcsAuthService authService,
-        IBcsTokenStore tokenStore,
         BcsInvestApiSettings settings,
-        IBcsClock? clock,
-        IBcsTokenRefreshCoordinator? tokenRefreshCoordinator)
+        IBcsClock? clock)
     {
         ArgumentNullException.ThrowIfNull(authService);
-        ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(settings);
-
-        settings.ValidateTokenSettings();
 
         return new BcsTokenManager(
             authService,
-            tokenStore,
             settings,
-            clock,
-            tokenRefreshCoordinator);
+            clock);
     }
 }

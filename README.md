@@ -2,7 +2,8 @@
 
 Thin C# SDK for BCS Trade API.
 
-Iteration 2 contains authorization, access/refresh token storage and timer-based token refresh.
+The SDK is a library, not a standalone token daemon. The application layer owns a stable external refresh/bootstrap
+secret and passes it through `BcsInvestApiSettings.RefreshToken` or `BcsInvestApiClientFactory.Create(refreshToken, ...)`.
 
 ## Target framework
 
@@ -10,32 +11,29 @@ Iteration 2 contains authorization, access/refresh token storage and timer-based
 net10.0
 ```
 
-## Scope of iteration 2
+## Features
 
-Included:
-
-- `BcsInvestApiClient` facade.
-- `BcsAuthService` low-level authorization service.
-- `BcsTokenManager` token manager.
-- `IBcsAccessTokenProvider` abstraction for future HTTP API clients.
-- In-memory token storage: `BcsInMemoryTokenStore`.
-- JSON file token storage: `BcsFileTokenStore`.
-- Timer-based token refresh via `BcsTokenManager.StartAutoRefresh()`.
-- Separate auth, read/query and command HTTP senders: command/order requests have no retries by default.
-- Raw auth request/response DTOs.
+- Authorization by stable external refresh/bootstrap secret.
+- Runtime access/refresh token cache in memory.
+- Lazy refresh before token expiration.
+- Optional auto-refresh loop.
+- DI integration with singleton `BcsTokenManager`.
+- Separate retry policy for auth and normal HTTP calls.
+- `IBcsAccessTokenProvider` abstraction for HTTP API clients.
 - Typed `BcsAuthException` for non-success auth responses.
-- Typed `BcsRefreshTokenExpiredException` for locally known expired stored refresh token.
-- Unit tests for form POST, response parsing, `invalid_grant`, token rotation and token storage.
+- Raw auth request/response DTOs.
 
-Not included:
+## Architecture
 
-- Instruments.
-- Market data.
-- Orders.
-- Portfolio/limits.
-- WebSocket.
-- Domain mapping or canonical models.
-- Encrypted token vault. File storage writes plaintext JSON and must be protected by OS file permissions.
+The host/application layer owns the stable external refresh/bootstrap secret. SDK core only receives that value as input
+when the client is created or resolved from DI.
+
+- The SDK does not own the long-term secret.
+- The SDK does not write tokens to disk.
+- Runtime `access_token` and rotated `refresh_token` values are stored only in `BcsTokenManager` memory.
+- If the process exits or crashes, in-memory token state is lost.
+- A new process must receive the same stable secret again from the upper layer.
+- If a persistent secret store is required, implement it in the host/application layer, not in SDK core.
 
 ## Auth endpoint
 
@@ -52,149 +50,73 @@ Form fields:
 | Field | Value |
 |---|---|
 | `client_id` | `trade-api-read` or `trade-api-write` |
-| `refresh_token` | refresh token from BCS Investments web UI, then the latest rotated `refresh_token` from storage |
+| `refresh_token` | current in-memory rotated refresh token when usable, otherwise the stable refresh/bootstrap secret |
 | `grant_type` | `refresh_token` |
 
-Response fields supported by DTO:
+## Settings
 
-| JSON field | C# property |
-|---|---|
-| `access_token` | `BcsAuthResponse.AccessToken` |
-| `expires_in` | `BcsAuthResponse.ExpiresIn` |
-| `refresh_expires_in` | `BcsAuthResponse.RefreshExpiresIn` |
-| `refresh_token` | `BcsAuthResponse.RefreshToken` |
-| `token_type` | `BcsAuthResponse.TokenType` |
-| `not-before-policy` | `BcsAuthResponse.NotBeforePolicy` |
-| `session_state` | `BcsAuthResponse.SessionState` |
-| `scope` | `BcsAuthResponse.Scope` |
+| Setting | Default | Description |
+|---|---:|---|
+| `RefreshToken` | required | Stable external refresh/bootstrap secret supplied by the host/application layer. |
+| `ClientId` | `trade-api-read` | BCS auth client id: `trade-api-read` or `trade-api-write`. |
+| `AuthUrl` | BCS token endpoint | Full Keycloak token endpoint URL. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
+| `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP auth URLs only for explicit local tests. |
+| `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
+| `AuthRetryAttempts` | `0` | Retry attempts for auth refresh-token exchange after the initial request. |
+| `HttpRetryAttempts` | `3` | Retry attempts for idempotent read/query HTTP calls after the initial request. |
+| `HttpRetryBaseDelay` | `250ms` | Base delay for exponential retry backoff. |
+| `TokenRefreshSkew` | `5 minutes` | Refresh access token before its actual expiration. |
+| `AutoRefreshInterval` | `1 minute` | Timer tick interval for the optional auto-refresh loop. |
+| `TokenRefreshOperationTimeout` | `60 seconds` | Maximum time allowed for one refresh-token auth exchange. |
 
-## Token manager behavior
+## Token Manager Behavior
 
-`BcsTokenManager` keeps the raw token pair as infrastructure state:
+`BcsTokenManager` keeps the runtime token pair in a private in-memory field:
 
-- Construction and DI resolution only validate settings; call `InitializeAsync()` when startup should fail fast on token storage state.
-- On first call it uses `BcsInvestApiSettings.RefreshToken` if storage is empty.
-- After successful authorization it saves both `access_token` and the rotated `refresh_token`.
-- Next refresh uses the stored rotated `refresh_token`, not the original token from settings.
-- `GetAccessTokenAsync()` returns the stored access token while it is valid.
-- If the access token expires soon, it calls the auth endpoint and stores a new pair.
-- The default refresh skew is 5 minutes before `access_token` expiration.
-- The timer tick interval is 1 minute by default.
-- The timer does not call the auth endpoint every minute; it only checks whether refresh is required.
+- Construction, factory creation and DI resolution validate settings and require `BcsInvestApiSettings.RefreshToken`.
+- On first token request it uses `BcsInvestApiSettings.RefreshToken`.
+- After successful authorization it updates the in-memory token pair.
+- Next refresh uses the in-memory rotated `refresh_token` while it is non-empty and not expired.
+- If the in-memory refresh token is missing or expired, refresh falls back to `BcsInvestApiSettings.RefreshToken`.
+- `GetAccessTokenAsync()` returns the in-memory access token while it is valid under `TokenRefreshSkew`.
+- If the access token expires soon, it calls the auth endpoint under a `SemaphoreSlim` refresh gate.
+- Concurrent callers re-check the in-memory token after entering the refresh gate.
+- `RefreshAsync()` always calls the auth endpoint.
 
-## Factory usage with in-memory storage
+## Usage Examples
 
-Use one `BcsTokenManager`/`BcsInvestApiClient` per refresh token when using the default in-memory storage. Each
-`BcsInvestApiClientFactory.Create(...)` call without a supplied `IBcsTokenStore` creates an independent in-memory
-store, so several factory-created clients with the same initial refresh token can race each other during refresh token
-rotation.
+### Factory
 
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
+
+var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
+    ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
 
 await using var client = BcsInvestApiClientFactory.Create(
-    refreshToken: "<initial-refresh-token>",
+    refreshToken: refreshToken,
     clientId: BcsAuthClientIds.TradeApiRead);
 
-await client.Tokens.InitializeAsync();
-string accessToken = await client.Tokens.GetAccessTokenAsync();
+var accessToken = await client.Tokens.GetAccessTokenAsync();
 ```
 
-For multiple direct clients/managers in one process, share the same `BcsInMemoryTokenStore`. The store also implements
-`IBcsTokenRefreshCoordinator`, and `BcsTokenManager` uses it automatically to serialize refresh operations:
+### DI
 
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Tokens;
-
-var settings = new BcsInvestApiSettings
-{
-    RefreshToken = "<initial-refresh-token>",
-    ClientId = BcsAuthClientIds.TradeApiRead,
-};
-
-var tokenStore = new BcsInMemoryTokenStore();
-
-await using var client1 = BcsInvestApiClientFactory.Create(settings, tokenStore: tokenStore);
-await using var client2 = BcsInvestApiClientFactory.Create(settings, tokenStore: tokenStore);
-```
-
-## Factory usage with file storage
-
-```csharp
-using Bcs.InvestApi;
-using Bcs.InvestApi.Auth;
-
-await using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
-{
-    RefreshToken = "<initial-refresh-token>",
-    ClientId = BcsAuthClientIds.TradeApiRead,
-    TokenStoragePath = @"C:\secure\bcs\tokens.json",
-    TokenRefreshSkew = TimeSpan.FromMinutes(5),
-    TokenStoreLockTimeout = TimeSpan.FromSeconds(10),
-    AutoRefreshInterval = TimeSpan.FromMinutes(1),
-});
-
-await client.Tokens.InitializeAsync();
-BcsTokenSet token = await client.Tokens.GetTokenSetAsync();
-client.Tokens.StartAutoRefresh();
-```
-
-The saved file contains token values and calculated expiration timestamps:
-
-```json
-{
-  "access_token": "...",
-  "refresh_token": "...",
-  "token_type": "bearer",
-  "expires_in": 86400,
-  "refresh_expires_in": 7776000,
-  "access_token_expires_at_utc": "2026-05-03T12:00:00+00:00",
-  "refresh_token_expires_at_utc": "2026-07-31T12:00:00+00:00",
-  "received_at_utc": "2026-05-02T12:00:00+00:00",
-  "not-before-policy": "0",
-  "session_state": "...",
-  "scope": "trade-api-read"
-}
-```
-
-## Low-level raw auth usage
-
-`BcsAuthService` is still available when the caller wants only one raw token exchange:
-
-```csharp
-BcsAuthResponse response = await client.Auth.GetAccessTokenAsync(new BcsAuthRequest
-{
-    ClientId = BcsAuthClientIds.TradeApiWrite,
-    RefreshToken = "<refresh-token>",
-    GrantType = BcsGrantTypes.RefreshToken,
-});
-```
-
-## DI usage
-
-```csharp
-using Bcs.InvestApi;
-using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Tokens;
 
 services.AddBcsInvestApiClient(settings =>
 {
-    settings.RefreshToken = "<initial-refresh-token>";
+    settings.RefreshToken = configuration["BCS_REFRESH_TOKEN"];
     settings.ClientId = BcsAuthClientIds.TradeApiRead;
-    settings.TokenStoragePath = @"C:\secure\bcs\tokens.json";
 });
 ```
 
-Resolving `BcsTokenManager` from DI does not read token storage. If the app needs startup fail-fast validation, call:
+`AddBcsInvestApiClient` registers `BcsTokenManager` as a singleton and exposes it through `IBcsAccessTokenProvider`.
 
-```csharp
-await provider.GetRequiredService<BcsTokenManager>().InitializeAsync(ct);
-```
-
-Then inject either the facade:
+Inject the facade:
 
 ```csharp
 public sealed class MyService
@@ -214,6 +136,8 @@ public sealed class MyService
 Or inject the token provider abstraction:
 
 ```csharp
+using Bcs.InvestApi.Tokens;
+
 public sealed class MyApiClient
 {
     private readonly IBcsAccessTokenProvider _tokens;
@@ -233,20 +157,60 @@ public sealed class MyApiClient
 }
 ```
 
-## HTTP retries
+## Auto-Refresh
+
+Lazy refresh works without `StartAutoRefresh()`: `GetAccessTokenAsync()` refreshes the token when the current access
+token is near expiration.
+
+Use `StartAutoRefresh()` only when the host wants a background timer to check the current token before normal calls
+arrive:
+
+```csharp
+client.Tokens.AutoRefreshFailed += (_, args) =>
+{
+    Console.Error.WriteLine(args.Exception.Message);
+};
+
+client.Tokens.StartAutoRefresh();
+
+try
+{
+    var accessToken = await client.Tokens.GetAccessTokenAsync();
+}
+finally
+{
+    await client.Tokens.StopAutoRefreshAsync();
+}
+```
+
+The auto-refresh loop uses the same lazy check and does not call the auth endpoint on every timer tick while the current
+access token is still usable. If BCS returns `invalid_grant`, the loop stops and the failure is available through
+`LastAutoRefreshException` and `AutoRefreshFailed`. Other refresh failures are reported through the same APIs and the
+loop keeps running.
+
+## Low-Level Raw Auth Usage
+
+`BcsAuthService` is available when the caller wants only one raw token exchange:
+
+```csharp
+BcsAuthResponse response = await client.Auth.GetAccessTokenAsync(new BcsAuthRequest
+{
+    ClientId = BcsAuthClientIds.TradeApiWrite,
+    RefreshToken = "<refresh-token>",
+    GrantType = BcsGrantTypes.RefreshToken,
+});
+```
+
+## HTTP Retries
 
 The SDK keeps retry policy selection explicit:
 
 - Auth refresh-token exchange uses a dedicated sender with retries disabled by default. Refresh tokens rotate on
   successful exchange, so retrying the same refresh token after a timeout, reset or gateway failure can turn a processed
-  first request into a later `400 invalid_grant` and lose the newly issued refresh token.
+  first request into a later `400 invalid_grant`.
 - Read/query requests use the read sender. This covers GET endpoints such as limits, portfolio, instruments and
-  candles, plus POST endpoints that are documented as idempotent read queries, such as instruments by tickers/ISINs.
-- Command requests use the command sender and are not retried by default. This covers order create/change/cancel and
-  any future non-idempotent trading operation.
-
-Read/query retries handle `HttpRequestException`, timeout exceptions, HTTP `408`, HTTP `429`, and HTTP `5xx` responses.
-Client/auth errors such as `400 invalid_grant` are not retried.
+  candles, plus POST endpoints that are documented as idempotent read queries.
+- Command requests use the command sender and are not retried by default.
 
 Defaults:
 
@@ -255,11 +219,10 @@ Defaults:
 - `HttpRetryBaseDelay = 250ms`
 - read/query exponential delays: 250ms, 500ms, 1000ms
 
-Set `HttpRetryAttempts = 0` to disable read/query retries, or adjust `HttpRetryBaseDelay` in `BcsInvestApiSettings`.
 Keep `AuthRetryAttempts = 0` unless the caller has an external guarantee that retrying the refresh-token exchange is
 safe. Command/order retries must be opt-in at the client operation level, not inherited from the shared HTTP layer.
 
-## Error handling
+## Error Handling
 
 BCS `400 invalid_grant` response is exposed as `BcsAuthException`:
 
@@ -274,11 +237,9 @@ catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 }
 ```
 
-A locally stored refresh token that is already past its saved expiration timestamp is exposed as `BcsRefreshTokenExpiredException`.
+## HttpClient Ownership
 
-## HttpClient ownership
-
-`BcsAuthService` no longer implements `IDisposable` and no longer disposes a `HttpClient` passed from outside.
+`BcsAuthService` does not implement `IDisposable` and does not dispose a `HttpClient` passed from outside.
 
 - In DI mode, `IHttpClientFactory` owns transport lifecycle.
 - In direct factory mode, `BcsInvestApiClientFactory` creates and disposes its own `HttpClient` when the facade is disposed.

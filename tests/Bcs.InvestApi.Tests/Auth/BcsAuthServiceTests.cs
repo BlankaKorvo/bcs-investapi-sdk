@@ -315,6 +315,35 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
+    public async Task GetAccessTokenAsync_WhenErrorEchoesRefreshToken_RedactsExceptionData()
+    {
+        const string refreshToken = "refresh-token-secret";
+        const string errorJson = """
+        {
+          "error": "invalid_grant",
+          "error_description": "Refresh token refresh-token-secret expired"
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.BadRequest, errorJson)));
+        var service = CreateService(handler);
+
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() =>
+            service.GetAccessTokenAsync(new BcsAuthRequest
+            {
+                RefreshToken = refreshToken,
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                GrantType = BcsGrantTypes.RefreshToken
+            }));
+
+        Assert.DoesNotContain(refreshToken, exception.Message);
+        Assert.DoesNotContain(refreshToken, exception.ErrorDescription);
+        Assert.DoesNotContain(refreshToken, exception.ResponseBody);
+        Assert.Contains("[redacted]", exception.ErrorDescription);
+        Assert.Contains("[redacted]", exception.ResponseBody);
+    }
+
+    [Fact]
     public async Task GetAccessTokenAsync_UsesExplicitRequestValuesInsteadOfSettingsTokenValues()
     {
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())));

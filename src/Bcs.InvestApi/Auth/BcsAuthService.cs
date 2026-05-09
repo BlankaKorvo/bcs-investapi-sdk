@@ -80,12 +80,14 @@ public sealed class BcsAuthService
             if (!response.IsSuccessStatusCode)
             {
                 var error = TryDeserializeError(responseBody);
+                var safeErrorDescription = RedactKnownSecret(error?.ErrorDescription, authRequest.RefreshToken);
+                var safeResponseBody = RedactKnownSecret(responseBody, authRequest.RefreshToken) ?? string.Empty;
 
                 throw new BcsAuthException(
                     response.StatusCode,
                     error?.Error,
-                    error?.ErrorDescription,
-                    responseBody);
+                    safeErrorDescription,
+                    safeResponseBody);
             }
 
             var authResponse = JsonSerializer.Deserialize<BcsAuthResponse>(
@@ -142,5 +144,15 @@ public sealed class BcsAuthService
         {
             return null;
         }
+    }
+
+    private static string? RedactKnownSecret(string? value, string secret)
+    {
+        if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(secret))
+        {
+            return value;
+        }
+
+        return value.Replace(secret, "[redacted]", StringComparison.Ordinal);
     }
 }
