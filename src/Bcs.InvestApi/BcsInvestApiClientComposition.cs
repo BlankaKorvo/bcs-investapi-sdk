@@ -3,6 +3,7 @@ namespace Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Limits;
+using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 
@@ -111,6 +112,30 @@ internal static class BcsInvestApiClientComposition
         ArgumentNullException.ThrowIfNull(requestSender);
 
         return new BcsLimitsService(httpClientFactory, tokens, requestSender);
+    }
+
+    public static BcsPortfolioService CreatePortfolioService(
+        HttpClient httpClient,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsPortfolioService(httpClient, tokens, requestSender);
+    }
+
+    public static BcsPortfolioService CreatePortfolioService(
+        Func<HttpClient> httpClientFactory,
+        IBcsAccessTokenProvider tokens,
+        IBcsReadHttpSender requestSender)
+    {
+        ArgumentNullException.ThrowIfNull(httpClientFactory);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(requestSender);
+
+        return new BcsPortfolioService(httpClientFactory, tokens, requestSender);
     }
 
     public static BcsTokenManager CreateTokenManager(

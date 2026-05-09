@@ -3,6 +3,7 @@ namespace Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Limits;
+using Bcs.InvestApi.Portfolio;
 using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,9 +100,19 @@ public static class BcsInvestApiClientExtensions
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
                 sp.GetRequiredService<IBcsReadHttpSender>());
         });
+        services.AddSingleton(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+
+            return BcsInvestApiClientComposition.CreatePortfolioService(
+                () => httpClientFactory.CreateClient(BcsInvestApiClientComposition.AuthHttpClientName),
+                sp.GetRequiredService<IBcsAccessTokenProvider>(),
+                sp.GetRequiredService<IBcsReadHttpSender>());
+        });
         services.AddSingleton(sp => new BcsInvestApiClient(
             sp.GetRequiredService<BcsAuthService>(),
             sp.GetRequiredService<BcsTokenManager>(),
-            sp.GetRequiredService<BcsLimitsService>()));
+            sp.GetRequiredService<BcsLimitsService>(),
+            sp.GetRequiredService<BcsPortfolioService>()));
     }
 }

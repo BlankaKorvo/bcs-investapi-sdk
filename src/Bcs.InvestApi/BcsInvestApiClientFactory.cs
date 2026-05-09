@@ -48,11 +48,16 @@ public static class BcsInvestApiClientFactory
             httpClient,
             tokens,
             BcsInvestApiClientComposition.CreateReadHttpSender(settings));
+        var portfolio = BcsInvestApiClientComposition.CreatePortfolioService(
+            httpClient,
+            tokens,
+            BcsInvestApiClientComposition.CreateReadHttpSender(settings));
 
         return new BcsInvestApiClient(
             auth,
             tokens,
             limits,
+            portfolio,
             ownsTokenManager: true,
             ownedTransport: httpClient);
     }

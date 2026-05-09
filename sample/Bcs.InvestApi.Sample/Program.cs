@@ -24,6 +24,9 @@ Console.WriteLine($"Future holdings: {limits.FutureHolding.Count}");
 Console.WriteLine($"Money limits: {limits.MoneyLimits.Count}");
 Console.WriteLine($"Futures limits: {limits.FuturesLimits.Count}");
 
+var portfolio = await client.GetPortfolioAsync();
+Console.WriteLine($"Portfolio positions: {portfolio.Count}");
+
 await client.Tokens.StopAutoRefreshAsync();
 
 return 0;
