@@ -4,6 +4,8 @@ VisualStudioVersion = 18.5.11723.231 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bcs.InvestApi", "src\Bcs.InvestApi\Bcs.InvestApi.csproj", "{0C51D75A-17B1-44E4-9680-151B1C6FB1E9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bcs.InvestApi.DependencyInjection", "src\Bcs.InvestApi.DependencyInjection\Bcs.InvestApi.DependencyInjection.csproj", "{8068F6C6-1C57-4B7F-8E5D-8CC35E55832E}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bcs.InvestApi.Tests", "tests\Bcs.InvestApi.Tests\Bcs.InvestApi.Tests.csproj", "{2143D54C-25E6-4398-8183-B4025E51A2B0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bcs.InvestApi.Sample", "sample\Bcs.InvestApi.Sample\Bcs.InvestApi.Sample.csproj", "{6BB47A3A-038F-44CE-9D11-9964B26B584B}"
@@ -18,6 +20,10 @@ Global
 		{0C51D75A-17B1-44E4-9680-151B1C6FB1E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0C51D75A-17B1-44E4-9680-151B1C6FB1E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0C51D75A-17B1-44E4-9680-151B1C6FB1E9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8068F6C6-1C57-4B7F-8E5D-8CC35E55832E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8068F6C6-1C57-4B7F-8E5D-8CC35E55832E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8068F6C6-1C57-4B7F-8E5D-8CC35E55832E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8068F6C6-1C57-4B7F-8E5D-8CC35E55832E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{2143D54C-25E6-4398-8183-B4025E51A2B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{2143D54C-25E6-4398-8183-B4025E51A2B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2143D54C-25E6-4398-8183-B4025E51A2B0}.Release|Any CPU.ActiveCfg = Release|Any CPU

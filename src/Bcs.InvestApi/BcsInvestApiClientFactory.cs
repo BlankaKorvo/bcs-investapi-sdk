@@ -71,7 +71,6 @@ public static class BcsInvestApiClientFactory
             requestSender);
 
         return new BcsInvestApiClient(
-            auth,
             tokens,
             limits,
             portfolio,

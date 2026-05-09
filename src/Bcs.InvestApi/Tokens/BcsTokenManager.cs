@@ -2,7 +2,6 @@ namespace Bcs.InvestApi.Tokens;
 
 using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Time;
-using Microsoft.Extensions.Options;
 
 internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsyncDisposable
 {
@@ -12,14 +11,6 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private BcsTokenSet? _currentTokenSet;
     private bool _disposed;
-
-    internal BcsTokenManager(
-        BcsAuthService authService,
-        IOptions<BcsInvestApiSettings> options,
-        IBcsClock clock)
-        : this(authService, GetSettings(options), clock)
-    {
-    }
 
     internal BcsTokenManager(
         BcsAuthService authService,
@@ -197,12 +188,6 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
 
     private static bool IsInvalidGrant(BcsAuthException exception) =>
         string.Equals(exception.Error, "invalid_grant", StringComparison.Ordinal);
-
-    private static BcsInvestApiSettings GetSettings(IOptions<BcsInvestApiSettings> options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        return options.Value;
-    }
 
     private void ThrowIfDisposed()
     {

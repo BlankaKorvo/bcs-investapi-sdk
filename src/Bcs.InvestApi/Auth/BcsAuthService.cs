@@ -3,7 +3,6 @@ namespace Bcs.InvestApi.Auth;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Bcs.InvestApi.Infrastructure;
-using Microsoft.Extensions.Options;
 
 internal sealed class BcsAuthService
 {
@@ -11,11 +10,6 @@ internal sealed class BcsAuthService
     private readonly bool _disposeHttpClientAfterRequest;
     private readonly IBcsHttpSender _requestSender;
     private readonly BcsInvestApiSettings _settings;
-
-    internal BcsAuthService(HttpClient httpClient, IOptions<BcsInvestApiSettings> options)
-        : this(httpClient, options.Value)
-    {
-    }
 
     internal BcsAuthService(HttpClient httpClient, BcsInvestApiSettings settings)
         : this(() => httpClient, settings, disposeHttpClientAfterRequest: false)

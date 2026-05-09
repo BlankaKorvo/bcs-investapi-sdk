@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Bcs.InvestApi.DependencyInjection\Bcs.InvestApi.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\src\Bcs.InvestApi\Bcs.InvestApi.csproj" />
   </ItemGroup>
 </Project>

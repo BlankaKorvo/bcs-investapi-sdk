@@ -122,6 +122,8 @@ var candles = await client.GetCandlesAsync(
 
 ### DI
 
+Install/reference `Bcs.InvestApi.DependencyInjection` when using Microsoft.Extensions.DependencyInjection.
+
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
@@ -135,6 +137,9 @@ services.AddBcsInvestApiClient(settings =>
 
 `AddBcsInvestApiClient` registers the facade and internal token services. Callers inject the facade and use broker API
 methods; access-token lifecycle is handled by the SDK.
+
+The core `Bcs.InvestApi` package does not depend on `Microsoft.Extensions.*`; DI registrations live in
+`Bcs.InvestApi.DependencyInjection`.
 
 Inject the facade:
 

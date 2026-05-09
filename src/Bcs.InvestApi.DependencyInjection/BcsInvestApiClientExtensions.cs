@@ -134,7 +134,6 @@ public static class BcsInvestApiClientExtensions
                 sp.GetRequiredService<IBcsHttpSender>());
         });
         services.AddSingleton(sp => new BcsInvestApiClient(
-            sp.GetRequiredService<BcsAuthService>(),
             sp.GetRequiredService<BcsTokenManager>(),
             sp.GetRequiredService<BcsLimitsService>(),
             sp.GetRequiredService<BcsPortfolioService>(),
