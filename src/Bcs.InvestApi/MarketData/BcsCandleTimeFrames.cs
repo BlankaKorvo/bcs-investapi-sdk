@@ -12,17 +12,6 @@ public static class BcsCandleTimeFrames
     public const string Week = "W";
     public const string Month = "MN";
 
-    public static bool IsKnown(string? timeFrame) =>
-        string.Equals(timeFrame, Minute1, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Minute5, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Minute15, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Minute30, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Hour1, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Hour4, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Day, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Week, StringComparison.Ordinal) ||
-        string.Equals(timeFrame, Month, StringComparison.Ordinal);
-
     internal static TimeSpan? GetFixedDuration(string timeFrame) =>
         timeFrame switch
         {

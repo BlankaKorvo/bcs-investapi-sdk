@@ -11,7 +11,7 @@ using Xunit;
 public sealed class BcsInstrumentsServiceTests
 {
     [Fact]
-    public async Task GetInstrumentsByIsinsPageAsync_PostsJsonBodyAndDeserializesResponse()
+    public async Task GetInstrumentsByIsinsAsync_PostsJsonBodyAndDeserializesResponse()
     {
         const string instrumentsJson = """
         [
@@ -113,7 +113,7 @@ public sealed class BcsInstrumentsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var instruments = await service.GetInstrumentsByIsinsPageAsync(
+        var instruments = await service.GetInstrumentsByIsinsAsync(
             new[] { " RU0007661625 " },
             page: 1,
             size: 25);
@@ -122,7 +122,7 @@ public sealed class BcsInstrumentsServiceTests
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
         Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
-        Assert.Equal("""{"isins":["RU0007661625"]}""", handler.LastRequestContent);
+        Assert.Equal("""{"isins":[" RU0007661625 "]}""", handler.LastRequestContent);
 
         var instrument = Assert.Single(instruments);
         Assert.Equal("GAZP", instrument.Ticker);
@@ -142,7 +142,7 @@ public sealed class BcsInstrumentsServiceTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByTickersPageAsync_PostsJsonBodyAndDeserializesResponse()
+    public async Task GetInstrumentsByTickersAsync_PostsJsonBodyAndDeserializesResponse()
     {
         const string instrumentsJson = """
         [
@@ -174,7 +174,7 @@ public sealed class BcsInstrumentsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var instruments = await service.GetInstrumentsByTickersPageAsync(
+        var instruments = await service.GetInstrumentsByTickersAsync(
             new[] { " SBER " },
             page: 1,
             size: 25);
@@ -183,7 +183,7 @@ public sealed class BcsInstrumentsServiceTests
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
         Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
-        Assert.Equal("""{"tickers":["SBER"]}""", handler.LastRequestContent);
+        Assert.Equal("""{"tickers":[" SBER "]}""", handler.LastRequestContent);
 
         var instrument = Assert.Single(instruments);
         Assert.Equal("SBER", instrument.Ticker);
@@ -197,7 +197,7 @@ public sealed class BcsInstrumentsServiceTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypePageAsync_SendsGetRequestAndDeserializesResponse()
+    public async Task GetInstrumentsByTypeAsync_SendsGetRequestAndDeserializesResponse()
     {
         const string instrumentsJson = """
         [
@@ -229,8 +229,8 @@ public sealed class BcsInstrumentsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var instruments = await service.GetInstrumentsByTypePageAsync(
-            " stock ",
+        var instruments = await service.GetInstrumentsByTypeAsync(
+            BcsInstrumentTypes.Stock,
             page: 1,
             size: 25);
 
@@ -250,7 +250,7 @@ public sealed class BcsInstrumentsServiceTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypePageAsync_WithOptionsType_SendsBaseAssetTicker()
+    public async Task GetInstrumentsByTypeAsync_WithOptionsType_SendsBaseAssetTicker()
     {
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
@@ -260,7 +260,7 @@ public sealed class BcsInstrumentsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByTypePageAsync(
+        await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Options,
             page: 1,
             size: 20,
@@ -268,24 +268,19 @@ public sealed class BcsInstrumentsServiceTests
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
-            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=OPTIONS&baseAssetTicker=SBER&size=20&page=1"),
+            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=OPTIONS&baseAssetTicker=%20SBER%20&size=20&page=1"),
             handler.LastRequest?.RequestUri);
         Assert.Null(handler.LastRequestContent);
     }
 
     [Fact]
-    public async Task GetInstrumentsByIsinsAsync_RequestsNextPageWhenPageIsFull()
+    public async Task GetInstrumentsByIsinsAsync_RequestsOnlySpecifiedPageWhenPageIsFull()
     {
         var requestedUris = new List<Uri?>();
-        var responses = new Queue<string>(new[]
-        {
-            """[{"ticker":"FIRST"},{"ticker":"SECOND"}]""",
-            """[{"ticker":"THIRD"}]""",
-        });
         var handler = new CapturingHttpMessageHandler((request, _) =>
         {
             requestedUris.Add(request.RequestUri);
-            return Task.FromResult(JsonResponse(HttpStatusCode.OK, responses.Dequeue()));
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """[{"ticker":"FIRST"},{"ticker":"SECOND"}]"""));
         });
         var service = new BcsInstrumentsService(
             CreateSettings(),
@@ -295,17 +290,17 @@ public sealed class BcsInstrumentsServiceTests
 
         var instruments = await service.GetInstrumentsByIsinsAsync(
             new[] { "RU0007661625" },
+            page: 3,
             size: 2);
 
-        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
             new[]
             {
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-isins?size=2&page=0"),
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-isins?size=2&page=1"),
+                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-isins?size=2&page=3"),
             },
             requestedUris);
-        Assert.Equal(new[] { "FIRST", "SECOND", "THIRD" }, instruments.Select(instrument => instrument.Ticker));
+        Assert.Equal(new[] { "FIRST", "SECOND" }, instruments.Select(instrument => instrument.Ticker));
     }
 
     [Theory]
@@ -316,22 +311,17 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, size));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 0, size: size));
     }
 
     [Fact]
-    public async Task GetInstrumentsByTickersAsync_RequestsNextPageWhenPageIsFull()
+    public async Task GetInstrumentsByTickersAsync_RequestsOnlySpecifiedPageWhenPageIsFull()
     {
         var requestedUris = new List<Uri?>();
-        var responses = new Queue<string>(new[]
-        {
-            """[{"ticker":"FIRST"},{"ticker":"SECOND"}]""",
-            """[{"ticker":"THIRD"}]""",
-        });
         var handler = new CapturingHttpMessageHandler((request, _) =>
         {
             requestedUris.Add(request.RequestUri);
-            return Task.FromResult(JsonResponse(HttpStatusCode.OK, responses.Dequeue()));
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """[{"ticker":"FIRST"},{"ticker":"SECOND"}]"""));
         });
         var service = new BcsInstrumentsService(
             CreateSettings(),
@@ -341,32 +331,27 @@ public sealed class BcsInstrumentsServiceTests
 
         var instruments = await service.GetInstrumentsByTickersAsync(
             new[] { "SBER" },
+            page: 3,
             size: 2);
 
-        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
             new[]
             {
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-tickers?size=2&page=0"),
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-tickers?size=2&page=1"),
+                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-tickers?size=2&page=3"),
             },
             requestedUris);
-        Assert.Equal(new[] { "FIRST", "SECOND", "THIRD" }, instruments.Select(instrument => instrument.Ticker));
+        Assert.Equal(new[] { "FIRST", "SECOND" }, instruments.Select(instrument => instrument.Ticker));
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypeAsync_RequestsNextPageWhenPageIsFull()
+    public async Task GetInstrumentsByTypeAsync_RequestsOnlySpecifiedPageWhenPageIsFull()
     {
         var requestedUris = new List<Uri?>();
-        var responses = new Queue<string>(new[]
-        {
-            """[{"ticker":"FIRST"},{"ticker":"SECOND"}]""",
-            """[{"ticker":"THIRD"}]""",
-        });
         var handler = new CapturingHttpMessageHandler((request, _) =>
         {
             requestedUris.Add(request.RequestUri);
-            return Task.FromResult(JsonResponse(HttpStatusCode.OK, responses.Dequeue()));
+            return Task.FromResult(JsonResponse(HttpStatusCode.OK, """[{"ticker":"FIRST"},{"ticker":"SECOND"}]"""));
         });
         var service = new BcsInstrumentsService(
             CreateSettings(),
@@ -376,17 +361,17 @@ public sealed class BcsInstrumentsServiceTests
 
         var instruments = await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Stock,
+            page: 3,
             size: 2);
 
-        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
             new[]
             {
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=STOCK&size=2&page=0"),
-                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=STOCK&size=2&page=1"),
+                new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=STOCK&size=2&page=3"),
             },
             requestedUris);
-        Assert.Equal(new[] { "FIRST", "SECOND", "THIRD" }, instruments.Select(instrument => instrument.Ticker));
+        Assert.Equal(new[] { "FIRST", "SECOND" }, instruments.Select(instrument => instrument.Ticker));
     }
 
     [Theory]
@@ -397,7 +382,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, size));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 0, size: size));
     }
 
     [Theory]
@@ -408,34 +393,34 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, size));
+            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: 0, size: size));
     }
 
     [Fact]
-    public async Task GetInstrumentsByIsinsPageAsync_WithNegativePage_Throws()
+    public async Task GetInstrumentsByIsinsAsync_WithNegativePage_Throws()
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByIsinsPageAsync(new[] { "RU0007661625" }, page: -1));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: -1, size: 50));
     }
 
     [Fact]
-    public async Task GetInstrumentsByTickersPageAsync_WithNegativePage_Throws()
+    public async Task GetInstrumentsByTickersAsync_WithNegativePage_Throws()
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTickersPageAsync(new[] { "SBER" }, page: -1));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: -1, size: 50));
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypePageAsync_WithNegativePage_Throws()
+    public async Task GetInstrumentsByTypeAsync_WithNegativePage_Throws()
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTypePageAsync(BcsInstrumentTypes.Stock, page: -1));
+            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: -1, size: 50));
     }
 
     [Fact]
@@ -444,7 +429,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByIsinsAsync(Array.Empty<string>()));
+            service.GetInstrumentsByIsinsAsync(Array.Empty<string>(), page: 0, size: 50));
     }
 
     [Fact]
@@ -453,52 +438,119 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTickersAsync(Array.Empty<string>()));
+            service.GetInstrumentsByTickersAsync(Array.Empty<string>(), page: 0, size: 50));
     }
 
-    [Fact]
-    public async Task GetInstrumentsByIsinsAsync_WithBlankIsin_Throws()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GetInstrumentsByIsinsAsync_WithNullOrEmptyIsin_Throws(string? isin)
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625", " " }));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625", isin! }, page: 0, size: 50));
     }
 
-    [Fact]
-    public async Task GetInstrumentsByTickersAsync_WithBlankTicker_Throws()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GetInstrumentsByTickersAsync_WithNullOrEmptyTicker_Throws(string? ticker)
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTickersAsync(new[] { "SBER", " " }));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER", ticker! }, page: 0, size: 50));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GetInstrumentsByTypeAsync_WithNullOrEmptyType_Throws(string? type)
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            service.GetInstrumentsByTypeAsync(type!, page: 0, size: 50));
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypeAsync_WithBlankType_Throws()
+    public async Task GetInstrumentsByTypeAsync_WithUnknownType_SendsRequest()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetInstrumentsByTypeAsync(
+            "UNKNOWN",
+            page: 0,
+            size: 50);
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=UNKNOWN&size=50&page=0"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetInstrumentsByTypeAsync_SendsCallerTypeValue()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetInstrumentsByTypeAsync(
+            "new_type",
+            page: 0,
+            size: 50);
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=new_type&size=50&page=0"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetInstrumentsByTypeAsync_WithWhitespaceInType_SendsEscapedCallerValue()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
+        var service = new BcsInstrumentsService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetInstrumentsByTypeAsync(
+            " stock ",
+            page: 0,
+            size: 50);
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=%20stock%20&size=50&page=0"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GetInstrumentsByTypeAsync_WithOptionsTypeAndNullOrEmptyBaseAssetTicker_Throws(
+        string? baseAssetTicker)
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTypeAsync(" "));
-    }
-
-    [Fact]
-    public async Task GetInstrumentsByTypeAsync_WithUnknownType_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTypeAsync("UNKNOWN"));
-    }
-
-    [Fact]
-    public async Task GetInstrumentsByTypeAsync_WithOptionsTypeAndMissingBaseAssetTicker_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Options));
+            service.GetInstrumentsByTypeAsync(
+                BcsInstrumentTypes.Options,
+                page: 0,
+                size: 50,
+                baseAssetTicker: baseAssetTicker));
     }
 
     private static BcsInstrumentsService CreateService() =>

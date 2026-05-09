@@ -107,14 +107,32 @@ public sealed class BcsTradingScheduleServiceTests
         Assert.Equal(1, handler.RequestCount);
     }
 
+    [Fact]
+    public async Task GetDailyTradingScheduleAsync_SendsCallerQueryValues()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetDailyTradingScheduleAsync(" TQBR ", " sber ");
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/trading-schedule/daily-schedule?classCode=%20TQBR%20&ticker=%20sber%20"),
+            handler.LastRequest?.RequestUri);
+    }
+
     [Theory]
+    [InlineData(null, "SBER")]
     [InlineData("", "SBER")]
-    [InlineData(" ", "SBER")]
+    [InlineData("TQBR", null)]
     [InlineData("TQBR", "")]
-    [InlineData("TQBR", " ")]
-    public async Task GetDailyTradingScheduleAsync_WithBlankRequiredQueryParameter_Throws(
-        string classCode,
-        string ticker)
+    public async Task GetDailyTradingScheduleAsync_WithNullOrEmptyRequiredQueryParameter_Throws(
+        string? classCode,
+        string? ticker)
     {
         var service = new BcsTradingScheduleService(
             CreateSettings(),
@@ -123,8 +141,8 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetDailyTradingScheduleAsync(classCode, ticker));
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            service.GetDailyTradingScheduleAsync(classCode!, ticker!));
     }
 
     private static BcsInvestApiSettings CreateSettings() =>

@@ -60,10 +60,10 @@ internal sealed class BcsMarketDataService
         string timeFrame,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(classCode);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
-        var normalizedTimeFrame = NormalizeTimeFrame(timeFrame);
-        ValidateDateRange(startDate, endDate, normalizedTimeFrame);
+        ArgumentException.ThrowIfNullOrEmpty(classCode);
+        ArgumentException.ThrowIfNullOrEmpty(ticker);
+        ArgumentException.ThrowIfNullOrEmpty(timeFrame);
+        ValidateDateRange(startDate, endDate, timeFrame);
 
         var httpClient = _httpClientFactory();
 
@@ -76,11 +76,11 @@ internal sealed class BcsMarketDataService
                     _requestSender,
                     accessToken => CreateRequestMessage(
                         accessToken,
-                        classCode.Trim(),
-                        ticker.Trim(),
+                        classCode,
+                        ticker,
                         startDate,
                         endDate,
-                        normalizedTimeFrame),
+                        timeFrame),
                     "candles-chart",
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -147,26 +147,6 @@ internal sealed class BcsMarketDataService
         return builder.Uri;
     }
 
-    private static string NormalizeTimeFrame(string timeFrame)
-    {
-        ArgumentNullException.ThrowIfNull(timeFrame);
-
-        var normalizedTimeFrame = timeFrame.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(normalizedTimeFrame))
-        {
-            throw new ArgumentException("Candle time frame is required.", nameof(timeFrame));
-        }
-
-        if (!BcsCandleTimeFrames.IsKnown(normalizedTimeFrame))
-        {
-            throw new ArgumentException(
-                $"Unsupported candle time frame '{timeFrame}'.",
-                nameof(timeFrame));
-        }
-
-        return normalizedTimeFrame;
-    }
-
     private static void ValidateDateRange(
         DateTimeOffset startDate,
         DateTimeOffset endDate,
@@ -181,9 +161,11 @@ internal sealed class BcsMarketDataService
                 "End date must be greater than start date.");
         }
 
-        var requestedCandles = string.Equals(timeFrame, BcsCandleTimeFrames.Month, StringComparison.Ordinal)
-            ? CountMonthCandles(startDate, endDate)
-            : CountFixedFrameCandles(duration, timeFrame);
+        var requestedCandles = CountCandlesIfKnown(startDate, endDate, duration, timeFrame);
+        if (requestedCandles is null)
+        {
+            return;
+        }
 
         if (requestedCandles > MaxCandlesPerRequest)
         {
@@ -194,12 +176,21 @@ internal sealed class BcsMarketDataService
         }
     }
 
-    private static long CountFixedFrameCandles(TimeSpan duration, string timeFrame)
+    private static long? CountCandlesIfKnown(
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        TimeSpan duration,
+        string timeFrame)
     {
+        if (string.Equals(timeFrame, BcsCandleTimeFrames.Month, StringComparison.Ordinal))
+        {
+            return CountMonthCandles(startDate, endDate);
+        }
+
         var frameDuration = BcsCandleTimeFrames.GetFixedDuration(timeFrame);
         if (frameDuration is null)
         {
-            throw new InvalidOperationException($"Unsupported fixed candle time frame '{timeFrame}'.");
+            return null;
         }
 
         return CountCeiling(duration.Ticks, frameDuration.Value.Ticks);

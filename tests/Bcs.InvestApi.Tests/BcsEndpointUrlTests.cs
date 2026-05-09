@@ -74,7 +74,7 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByIsinsPageAsync_UsesConfiguredBaseUrlAndQuery()
+    public async Task GetInstrumentsByIsinsAsync_UsesConfiguredBaseUrlAndQuery()
     {
         var settings = CreateSettings(new Uri("https://mock.example/root/"));
         var handler = new CapturingHttpMessageHandler((_, _) =>
@@ -85,7 +85,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByIsinsPageAsync(new[] { "RU0007661625" }, page: 2, size: 50);
+        await service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 2, size: 50);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -95,7 +95,7 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByTickersPageAsync_UsesConfiguredBaseUrlAndQuery()
+    public async Task GetInstrumentsByTickersAsync_UsesConfiguredBaseUrlAndQuery()
     {
         var settings = CreateSettings(new Uri("https://mock.example/root/"));
         var handler = new CapturingHttpMessageHandler((_, _) =>
@@ -106,7 +106,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByTickersPageAsync(new[] { "SBER" }, page: 2, size: 50);
+        await service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 2, size: 50);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -116,7 +116,7 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
-    public async Task GetInstrumentsByTypePageAsync_UsesConfiguredBaseUrlAndQuery()
+    public async Task GetInstrumentsByTypeAsync_UsesConfiguredBaseUrlAndQuery()
     {
         var settings = CreateSettings(new Uri("https://mock.example/root/"));
         var handler = new CapturingHttpMessageHandler((_, _) =>
@@ -127,7 +127,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByTypePageAsync(
+        await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Options,
             page: 2,
             size: 50,

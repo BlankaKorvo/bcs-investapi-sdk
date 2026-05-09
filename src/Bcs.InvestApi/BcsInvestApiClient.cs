@@ -109,61 +109,33 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 
     public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
         IEnumerable<string> isins,
-        int size = 50,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByIsinsAsync(isins, size, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsPageAsync(
-        IEnumerable<string> isins,
         int page,
-        int size = 50,
+        int size,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByIsinsPageAsync(isins, page, size, cancellationToken);
+        return _instruments.GetInstrumentsByIsinsAsync(isins, page, size, cancellationToken);
     }
 
     public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
         IEnumerable<string> tickers,
-        int size = 50,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTickersAsync(tickers, size, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersPageAsync(
-        IEnumerable<string> tickers,
         int page,
-        int size = 50,
+        int size,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTickersPageAsync(tickers, page, size, cancellationToken);
+        return _instruments.GetInstrumentsByTickersAsync(tickers, page, size, cancellationToken);
     }
 
     public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
         string type,
-        int size = 50,
-        string? baseAssetTicker = null,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTypeAsync(type, size, baseAssetTicker, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypePageAsync(
-        string type,
         int page,
-        int size = 50,
+        int size,
         string? baseAssetTicker = null,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTypePageAsync(type, page, size, baseAssetTicker, cancellationToken);
+        return _instruments.GetInstrumentsByTypeAsync(type, page, size, baseAssetTicker, cancellationToken);
     }
 
     public void Dispose()

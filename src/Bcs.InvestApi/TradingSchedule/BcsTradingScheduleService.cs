@@ -55,8 +55,8 @@ internal sealed class BcsTradingScheduleService
         string ticker,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(classCode);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ticker);
+        ArgumentException.ThrowIfNullOrEmpty(classCode);
+        ArgumentException.ThrowIfNullOrEmpty(ticker);
 
         var httpClient = _httpClientFactory();
 

@@ -101,10 +101,14 @@ await using var client = BcsInvestApiClientFactory.Create(
 
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
 var instruments = await client.GetInstrumentsByIsinsAsync(
-    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" });
+    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
+    page: 0,
+    size: 50);
 var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(
-    new[] { "SBER", "GAZP", "ROSN" });
-var stocks = await client.GetInstrumentsByTypePageAsync(
+    new[] { "SBER", "GAZP", "ROSN" },
+    page: 0,
+    size: 50);
+var stocks = await client.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Stock,
     page: 0,
     size: 50);
@@ -153,48 +157,29 @@ public sealed class MyService
 
 ### Instruments by ISIN, ticker, and type
 
-`GetInstrumentsByIsinsAsync(...)` follows BCS pagination automatically: it starts from page `0` and requests the next
-page while the previous response contains exactly `size` items.
+Instrument lookup methods request exactly one BCS page. Callers pass `page` and `size` explicitly and own any
+multi-page iteration policy.
 
 ```csharp
 var instruments = await client.GetInstrumentsByIsinsAsync(
     new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
+    page: 0,
     size: 50);
 ```
-
-`GetInstrumentsByTickersAsync(...)` uses the same pagination behavior for ticker lookup.
 
 ```csharp
 var instruments = await client.GetInstrumentsByTickersAsync(
     new[] { "SBER", "GAZP", "ROSN" },
-    size: 50);
-```
-
-Use `GetInstrumentsByIsinsPageAsync(...)` when the host needs one specific page.
-
-```csharp
-var page = await client.GetInstrumentsByIsinsPageAsync(
-    new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
     page: 0,
     size: 50);
 ```
-
-Use `GetInstrumentsByTickersPageAsync(...)` for a specific ticker page.
-
-```csharp
-var page = await client.GetInstrumentsByTickersPageAsync(
-    new[] { "SBER", "GAZP", "ROSN" },
-    page: 0,
-    size: 50);
-```
-
-`GetInstrumentsByTypeAsync(...)` follows the same pagination rule for an instrument type.
 
 ```csharp
 using Bcs.InvestApi.Instruments;
 
 var stocks = await client.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Stock,
+    page: 0,
     size: 50);
 ```
 
@@ -203,17 +188,9 @@ For `OPTIONS`, BCS requires `baseAssetTicker`.
 ```csharp
 var sberOptions = await client.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Options,
+    page: 0,
     size: 50,
     baseAssetTicker: "SBER");
-```
-
-Use `GetInstrumentsByTypePageAsync(...)` for one specific page.
-
-```csharp
-var page = await client.GetInstrumentsByTypePageAsync(
-    BcsInstrumentTypes.Etf,
-    page: 0,
-    size: 50);
 ```
 
 ### Historical candles

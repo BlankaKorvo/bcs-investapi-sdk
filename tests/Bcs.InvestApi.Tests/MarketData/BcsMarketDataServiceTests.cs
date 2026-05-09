@@ -46,11 +46,11 @@ public sealed class BcsMarketDataServiceTests
             " SBER ",
             new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
-            " h1 ");
+            BcsCandleTimeFrames.Hour1);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
-            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T10%3A00%3A00.0000000Z&timeFrame=H1"),
+            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=%20TQBR%20&ticker=%20SBER%20&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T10%3A00%3A00.0000000Z&timeFrame=H1"),
             handler.LastRequest?.RequestUri);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
@@ -72,40 +72,72 @@ public sealed class BcsMarketDataServiceTests
     }
 
     [Theory]
+    [InlineData(null, "SBER", "M1")]
     [InlineData("", "SBER", "M1")]
-    [InlineData(" ", "SBER", "M1")]
+    [InlineData("TQBR", null, "M1")]
     [InlineData("TQBR", "", "M1")]
-    [InlineData("TQBR", " ", "M1")]
+    [InlineData("TQBR", "SBER", null)]
     [InlineData("TQBR", "SBER", "")]
-    [InlineData("TQBR", "SBER", " ")]
-    public async Task GetCandlesAsync_WithBlankRequiredQueryParameter_Throws(
-        string classCode,
-        string ticker,
-        string timeFrame)
+    public async Task GetCandlesAsync_WithNullOrEmptyRequiredQueryParameter_Throws(
+        string? classCode,
+        string? ticker,
+        string? timeFrame)
     {
         var service = CreateService();
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
             service.GetCandlesAsync(
-                classCode,
-                ticker,
+                classCode!,
+                ticker!,
                 new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-                timeFrame));
+                timeFrame!));
     }
 
     [Fact]
-    public async Task GetCandlesAsync_WithUnknownTimeFrame_Throws()
+    public async Task GetCandlesAsync_WithUnknownTimeFrame_SendsRequest()
     {
-        var service = CreateService();
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsMarketDataService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetCandlesAsync(
-                "TQBR",
-                "SBER",
-                new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-                "M2"));
+        await service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
+            "M2");
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T08%3A00%3A00.0000000Z&timeFrame=M2"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetCandlesAsync_SendsCallerTimeFrameValue()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsMarketDataService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
+            " h1 ");
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T08%3A00%3A00.0000000Z&timeFrame=%20h1%20"),
+            handler.LastRequest?.RequestUri);
     }
 
     [Fact]

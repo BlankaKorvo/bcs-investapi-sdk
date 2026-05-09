@@ -24,8 +24,8 @@ var portfolio = await client.GetPortfolioAsync();
 Console.WriteLine($"Portfolio positions: {portfolio.Count}");
 
 var isins = GetConfiguredIsins();
-var instruments = await client.GetInstrumentsByIsinsAsync(isins);
-Console.WriteLine($"Instruments by ISIN: {instruments.Count}");
+var instruments = await client.GetInstrumentsByIsinsAsync(isins, page: 0, size: 50);
+Console.WriteLine($"Instruments by ISIN page 0: {instruments.Count}");
 
 foreach (var instrument in instruments.Take(10))
 {
@@ -34,8 +34,8 @@ foreach (var instrument in instruments.Take(10))
 }
 
 var tickers = GetConfiguredTickers();
-var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(tickers);
-Console.WriteLine($"Instruments by ticker: {instrumentsByTicker.Count}");
+var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(tickers, page: 0, size: 50);
+Console.WriteLine($"Instruments by ticker page 0: {instrumentsByTicker.Count}");
 
 foreach (var instrument in instrumentsByTicker.Take(10))
 {
@@ -43,7 +43,7 @@ foreach (var instrument in instrumentsByTicker.Take(10))
         $"  {instrument.Ticker}: {instrument.Isin} {instrument.PrimaryBoard} {instrument.DisplayName}");
 }
 
-var stocksPage = await client.GetInstrumentsByTypePageAsync(
+var stocksPage = await client.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Stock,
     page: 0,
     size: 10);

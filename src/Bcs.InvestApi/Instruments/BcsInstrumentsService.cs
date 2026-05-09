@@ -12,7 +12,6 @@ internal sealed class BcsInstrumentsService
     private const string InstrumentsByIsinsPath = "trade-api-information-service/api/v1/instruments/by-isins";
     private const string InstrumentsByTickersPath = "trade-api-information-service/api/v1/instruments/by-tickers";
     private const string InstrumentsByTypePath = "trade-api-information-service/api/v1/instruments/by-type";
-    private const int DefaultPageSize = 50;
     private const int MaxPageSize = 100;
 
     private readonly Func<HttpClient> _httpClientFactory;
@@ -62,61 +61,11 @@ internal sealed class BcsInstrumentsService
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
         IEnumerable<string> isins,
-        int size = DefaultPageSize,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedIsins = NormalizeIsins(isins);
-        ValidateSize(size);
-
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            var instruments = new List<BcsInstrument>();
-            var page = 0;
-
-            while (true)
-            {
-                var pageItems = await SendPageAsync(
-                    httpClient,
-                    normalizedIsins,
-                    page,
-                    size,
-                    CreateIsinsRequestMessage,
-                    "instruments-by-isins",
-                    "BCS instruments by ISIN response body is empty or cannot be deserialized.",
-                    cancellationToken)
-                    .ConfigureAwait(false);
-
-                instruments.AddRange(pageItems);
-
-                if (pageItems.Count < size)
-                {
-                    return instruments;
-                }
-
-                checked
-                {
-                    page++;
-                }
-            }
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
-    }
-
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsPageAsync(
-        IEnumerable<string> isins,
         int page,
-        int size = DefaultPageSize,
+        int size,
         CancellationToken cancellationToken = default)
     {
-        var normalizedIsins = NormalizeIsins(isins);
+        var requestedIsins = ValidateIsins(isins);
         ValidatePage(page);
         ValidateSize(size);
 
@@ -126,7 +75,7 @@ internal sealed class BcsInstrumentsService
         {
             return await SendPageAsync(
                 httpClient,
-                normalizedIsins,
+                requestedIsins,
                 page,
                 size,
                 CreateIsinsRequestMessage,
@@ -146,61 +95,11 @@ internal sealed class BcsInstrumentsService
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
         IEnumerable<string> tickers,
-        int size = DefaultPageSize,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedTickers = NormalizeTickers(tickers);
-        ValidateSize(size);
-
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            var instruments = new List<BcsInstrument>();
-            var page = 0;
-
-            while (true)
-            {
-                var pageItems = await SendPageAsync(
-                    httpClient,
-                    normalizedTickers,
-                    page,
-                    size,
-                    CreateTickersRequestMessage,
-                    "instruments-by-tickers",
-                    "BCS instruments by ticker response body is empty or cannot be deserialized.",
-                    cancellationToken)
-                    .ConfigureAwait(false);
-
-                instruments.AddRange(pageItems);
-
-                if (pageItems.Count < size)
-                {
-                    return instruments;
-                }
-
-                checked
-                {
-                    page++;
-                }
-            }
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
-    }
-
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersPageAsync(
-        IEnumerable<string> tickers,
         int page,
-        int size = DefaultPageSize,
+        int size,
         CancellationToken cancellationToken = default)
     {
-        var normalizedTickers = NormalizeTickers(tickers);
+        var requestedTickers = ValidateTickers(tickers);
         ValidatePage(page);
         ValidateSize(size);
 
@@ -210,7 +109,7 @@ internal sealed class BcsInstrumentsService
         {
             return await SendPageAsync(
                 httpClient,
-                normalizedTickers,
+                requestedTickers,
                 page,
                 size,
                 CreateTickersRequestMessage,
@@ -230,63 +129,13 @@ internal sealed class BcsInstrumentsService
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
         string type,
-        int size = DefaultPageSize,
-        string? baseAssetTicker = null,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedType = NormalizeInstrumentType(type);
-        var normalizedBaseAssetTicker = NormalizeBaseAssetTicker(normalizedType, baseAssetTicker);
-        ValidateSize(size);
-
-        var httpClient = _httpClientFactory();
-
-        try
-        {
-            var instruments = new List<BcsInstrument>();
-            var page = 0;
-
-            while (true)
-            {
-                var pageItems = await SendTypePageAsync(
-                    httpClient,
-                    normalizedType,
-                    normalizedBaseAssetTicker,
-                    page,
-                    size,
-                    cancellationToken)
-                    .ConfigureAwait(false);
-
-                instruments.AddRange(pageItems);
-
-                if (pageItems.Count < size)
-                {
-                    return instruments;
-                }
-
-                checked
-                {
-                    page++;
-                }
-            }
-        }
-        finally
-        {
-            if (_disposeHttpClientAfterRequest)
-            {
-                httpClient.Dispose();
-            }
-        }
-    }
-
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypePageAsync(
-        string type,
         int page,
-        int size = DefaultPageSize,
+        int size,
         string? baseAssetTicker = null,
         CancellationToken cancellationToken = default)
     {
-        var normalizedType = NormalizeInstrumentType(type);
-        var normalizedBaseAssetTicker = NormalizeBaseAssetTicker(normalizedType, baseAssetTicker);
+        ArgumentException.ThrowIfNullOrEmpty(type);
+        ValidateBaseAssetTicker(type, baseAssetTicker);
         ValidatePage(page);
         ValidateSize(size);
 
@@ -296,8 +145,8 @@ internal sealed class BcsInstrumentsService
         {
             return await SendTypePageAsync(
                 httpClient,
-                normalizedType,
-                normalizedBaseAssetTicker,
+                type,
+                baseAssetTicker,
                 page,
                 size,
                 cancellationToken)
@@ -491,40 +340,19 @@ internal sealed class BcsInstrumentsService
         return builder.Uri;
     }
 
-    private static IReadOnlyList<string> NormalizeIsins(IEnumerable<string> isins)
+    private static IReadOnlyList<string> ValidateIsins(IEnumerable<string> isins)
     {
-        return NormalizeValues(isins, nameof(isins), "ISIN");
+        return ValidateValues(isins, nameof(isins), "ISIN");
     }
 
-    private static IReadOnlyList<string> NormalizeTickers(IEnumerable<string> tickers)
+    private static IReadOnlyList<string> ValidateTickers(IEnumerable<string> tickers)
     {
-        return NormalizeValues(tickers, nameof(tickers), "ticker");
+        return ValidateValues(tickers, nameof(tickers), "ticker");
     }
 
-    private static string NormalizeInstrumentType(string type)
+    private static void ValidateBaseAssetTicker(string type, string? baseAssetTicker)
     {
-        ArgumentNullException.ThrowIfNull(type);
-
-        var normalizedType = type.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(normalizedType))
-        {
-            throw new ArgumentException("Instrument type is required.", nameof(type));
-        }
-
-        if (!BcsInstrumentTypes.IsKnown(normalizedType))
-        {
-            throw new ArgumentException(
-                $"Unsupported instrument type '{type}'.",
-                nameof(type));
-        }
-
-        return normalizedType;
-    }
-
-    private static string? NormalizeBaseAssetTicker(string type, string? baseAssetTicker)
-    {
-        var normalizedTicker = baseAssetTicker?.Trim();
-        if (string.IsNullOrWhiteSpace(normalizedTicker))
+        if (string.IsNullOrEmpty(baseAssetTicker))
         {
             if (string.Equals(type, BcsInstrumentTypes.Options, StringComparison.Ordinal))
             {
@@ -532,35 +360,29 @@ internal sealed class BcsInstrumentsService
                     "Base asset ticker is required when instrument type is OPTIONS.",
                     nameof(baseAssetTicker));
             }
-
-            return null;
         }
-
-        return normalizedTicker;
     }
 
-    private static IReadOnlyList<string> NormalizeValues(
+    private static IReadOnlyList<string> ValidateValues(
         IEnumerable<string> values,
         string parameterName,
         string displayName)
     {
         ArgumentNullException.ThrowIfNull(values, parameterName);
 
-        var normalizedValues = values
-            .Select(value => value?.Trim() ?? string.Empty)
-            .ToArray();
+        var requestedValues = values.ToArray();
 
-        if (normalizedValues.Length == 0)
+        if (requestedValues.Length == 0)
         {
             throw new ArgumentException($"At least one {displayName} is required.", parameterName);
         }
 
-        if (normalizedValues.Any(string.IsNullOrWhiteSpace))
+        if (requestedValues.Any(string.IsNullOrEmpty))
         {
-            throw new ArgumentException($"{displayName} values must not be blank.", parameterName);
+            throw new ArgumentException($"{displayName} values must not be null or empty.", parameterName);
         }
 
-        return normalizedValues;
+        return requestedValues;
     }
 
     private static void ValidatePage(int page)
