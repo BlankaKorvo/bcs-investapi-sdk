@@ -48,6 +48,7 @@ public sealed record BcsFutureHolding
 
     public string? Exchange { get; init; }
 
+    [JsonPropertyName("cbplPlanned")]
     public decimal? CbplPlanned { get; init; }
 
     public decimal? VarMargin { get; init; }
@@ -95,14 +96,19 @@ public sealed record BcsFuturesLimit
     [JsonPropertyName("accruedint")]
     public decimal? AccruedInt { get; init; }
 
+    [JsonPropertyName("cbpLimit")]
     public decimal? CbpLimit { get; init; }
 
+    [JsonPropertyName("cbplUsed")]
     public decimal? CbplUsed { get; init; }
 
+    [JsonPropertyName("cbplPlanned")]
     public decimal? CbplPlanned { get; init; }
 
+    [JsonPropertyName("cbplUsedForOrders")]
     public decimal? CbplUsedForOrders { get; init; }
 
+    [JsonPropertyName("cbplUsedForPositions")]
     public decimal? CbplUsedForPositions { get; init; }
 
     public decimal? OptionsPremium { get; init; }

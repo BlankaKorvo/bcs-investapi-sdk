@@ -36,47 +36,14 @@ public static class BcsInvestApiClientFactory
             ? new HttpClient()
             : new HttpClient(httpMessageHandler, disposeHandler: false);
 
-        BcsInvestApiClientComposition.ConfigureAuthHttpClient(settings, httpClient);
+        BcsInvestApiHttpClientConfiguration.ConfigureAuthHttpClient(settings, httpClient);
 
-        var requestSender = BcsInvestApiClientComposition.CreateHttpRequestSender();
-        var auth = BcsInvestApiClientComposition.CreateAuthService(settings, httpClient, requestSender);
-        var tokens = BcsInvestApiClientComposition.CreateTokenManager(
-            auth,
+        var services = BcsInvestApiClientServices.Create(
             settings,
+            httpClient,
             clock);
-        var limits = BcsInvestApiClientComposition.CreateLimitsService(
-            settings,
-            httpClient,
-            tokens,
-            requestSender);
-        var portfolio = BcsInvestApiClientComposition.CreatePortfolioService(
-            settings,
-            httpClient,
-            tokens,
-            requestSender);
-        var tradingSchedule = BcsInvestApiClientComposition.CreateTradingScheduleService(
-            settings,
-            httpClient,
-            tokens,
-            requestSender);
-        var instruments = BcsInvestApiClientComposition.CreateInstrumentsService(
-            settings,
-            httpClient,
-            tokens,
-            requestSender);
-        var marketData = BcsInvestApiClientComposition.CreateMarketDataService(
-            settings,
-            httpClient,
-            tokens,
-            requestSender);
 
-        return new BcsInvestApiClient(
-            tokens,
-            limits,
-            portfolio,
-            tradingSchedule,
-            instruments,
-            marketData,
+        return services.CreateClient(
             ownsTokenManager: true,
             ownedTransport: httpClient);
     }

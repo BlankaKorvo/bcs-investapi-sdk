@@ -1,5 +1,7 @@
 namespace Bcs.InvestApi.Portfolio;
 
+using System.Text.Json.Serialization;
+
 public sealed record BcsPortfolioItem
 {
     public string? Type { get; init; }
@@ -50,12 +52,16 @@ public sealed record BcsPortfolioItem
 
     public decimal? CurrentValueEur { get; init; }
 
+    [JsonPropertyName("unrealizedPL")]
     public decimal? UnrealizedPL { get; init; }
 
+    [JsonPropertyName("unrealizedPercentPL")]
     public decimal? UnrealizedPercentPL { get; init; }
 
+    [JsonPropertyName("dailyPL")]
     public decimal? DailyPL { get; init; }
 
+    [JsonPropertyName("dailyPercentPL")]
     public decimal? DailyPercentPL { get; init; }
 
     public decimal? PortfolioShare { get; init; }
