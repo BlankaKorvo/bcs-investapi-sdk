@@ -2,6 +2,7 @@ namespace Bcs.InvestApi.Infrastructure;
 
 using System.Net;
 using System.Text.Json;
+using Bcs.InvestApi.Exceptions;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsApiRequestExecutor

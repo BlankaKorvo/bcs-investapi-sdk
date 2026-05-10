@@ -1,8 +1,10 @@
-namespace Bcs.InvestApi.Auth;
+namespace Bcs.InvestApi.DTO;
+
+using Bcs.InvestApi.DTO.Enums;
 
 internal sealed record BcsAuthRequest
 {
-    public required string ClientId { get; init; }
+    public required BcsAuthClientIds ClientId { get; init; }
 
     public required string RefreshToken { get; init; }
 
@@ -10,10 +12,7 @@ internal sealed record BcsAuthRequest
 
     internal void Validate()
     {
-        if (string.IsNullOrWhiteSpace(ClientId))
-        {
-            throw new ArgumentException("BCS auth client_id is required.", nameof(ClientId));
-        }
+        _ = ClientId.ToApiValue();
 
         if (string.IsNullOrWhiteSpace(RefreshToken))
         {

@@ -1,7 +1,10 @@
 namespace Bcs.InvestApi.Tests.Auth;
 
 using System.Net;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Xunit;
 
@@ -162,38 +165,21 @@ public sealed class BcsAuthServiceTests
     }
 
     [Fact]
-    public async Task GetAccessTokenAsync_AcceptsUnknownClientIdOnRawRequest()
+    public async Task GetAccessTokenAsync_UnsupportedClientId_ThrowsArgumentOutOfRangeException()
     {
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())));
         var service = CreateService(handler);
 
-        await service.GetAccessTokenAsync(new BcsAuthRequest
-        {
-            RefreshToken = "refresh-token-1",
-            ClientId = "trade-api-future",
-            GrantType = BcsGrantTypes.RefreshToken
-        });
-
-        Assert.Contains("client_id=trade-api-future", handler.LastRequestContent);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task GetAccessTokenAsync_EmptyClientId_ThrowsArgumentException(string clientId)
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())));
-        var service = CreateService(handler);
-
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             service.GetAccessTokenAsync(new BcsAuthRequest
             {
                 RefreshToken = "refresh-token-1",
-                ClientId = clientId,
+                ClientId = (BcsAuthClientIds)999,
                 GrantType = BcsGrantTypes.RefreshToken
             }));
 
-        Assert.Equal("ClientId", exception.ParamName);
+        Assert.Equal("clientId", exception.ParamName);
+        Assert.Equal(0, handler.RequestCount);
     }
 
     [Fact]

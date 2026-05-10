@@ -1,13 +1,13 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Time;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Services;
 
 public static class BcsInvestApiClientFactory
 {
     public static BcsInvestApiClient Create(
         string refreshToken,
-        string clientId = BcsAuthClientIds.TradeApiRead,
+        BcsAuthClientIds clientId = BcsAuthClientIds.TradeApiRead,
         HttpMessageHandler? httpMessageHandler = null)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
@@ -27,7 +27,7 @@ public static class BcsInvestApiClientFactory
     public static BcsInvestApiClient Create(
         BcsInvestApiSettings settings,
         HttpMessageHandler? httpMessageHandler = null,
-        IBcsClock? clock = null)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateTokenSettings();
@@ -41,7 +41,7 @@ public static class BcsInvestApiClientFactory
         var services = BcsInvestApiClientServices.Create(
             settings,
             httpClient,
-            clock);
+            timeProvider);
 
         return services.CreateClient(
             ownsTokenManager: true,

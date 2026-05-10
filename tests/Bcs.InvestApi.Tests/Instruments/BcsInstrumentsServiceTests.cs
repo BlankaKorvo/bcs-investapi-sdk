@@ -2,8 +2,9 @@ namespace Bcs.InvestApi.Tests.Instruments;
 
 using System.Net;
 using Bcs.InvestApi;
+using Bcs.InvestApi.DTO.Enums;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Instruments;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
 using Xunit;
@@ -574,79 +575,13 @@ public sealed class BcsInstrumentsServiceTests
             service.GetInstrumentsByTickersAsync(new[] { "SBER", ticker! }, page: 0, size: 50));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" ")]
-    public async Task GetInstrumentsByTypeAsync_WithNullOrWhitespaceType_Throws(string? type)
+    [Fact]
+    public async Task GetInstrumentsByTypeAsync_WithUnsupportedType_Throws()
     {
         var service = CreateService();
 
-        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTypeAsync(type!, page: 0, size: 50));
-    }
-
-    [Fact]
-    public async Task GetInstrumentsByTypeAsync_WithUnknownType_SendsRequest()
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
-        var service = new BcsInstrumentsService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        await service.GetInstrumentsByTypeAsync(
-            "UNKNOWN",
-            page: 0,
-            size: 50);
-
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=UNKNOWN&size=50&page=0"),
-            handler.LastRequest?.RequestUri);
-    }
-
-    [Fact]
-    public async Task GetInstrumentsByTypeAsync_SendsCallerTypeValue()
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
-        var service = new BcsInstrumentsService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        await service.GetInstrumentsByTypeAsync(
-            "new_type",
-            page: 0,
-            size: 50);
-
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=new_type&size=50&page=0"),
-            handler.LastRequest?.RequestUri);
-    }
-
-    [Fact]
-    public async Task GetInstrumentsByTypeAsync_WithWhitespaceAroundType_SendsEscapedCallerValue()
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, "[]")));
-        var service = new BcsInstrumentsService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        await service.GetInstrumentsByTypeAsync(
-            " stock ",
-            page: 0,
-            size: 50);
-
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-information-service/api/v1/instruments/by-type?type=%20stock%20&size=50&page=0"),
-            handler.LastRequest?.RequestUri);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.GetInstrumentsByTypeAsync((BcsInstrumentTypes)999, page: 0, size: 50));
     }
 
     private static BcsInstrumentsService CreateService() =>

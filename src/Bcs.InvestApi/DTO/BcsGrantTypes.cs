@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.Auth;
+namespace Bcs.InvestApi.DTO;
 
 internal static class BcsGrantTypes
 {

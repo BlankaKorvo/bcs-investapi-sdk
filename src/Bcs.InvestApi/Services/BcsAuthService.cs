@@ -1,7 +1,11 @@
-namespace Bcs.InvestApi.Auth;
+namespace Bcs.InvestApi.Services;
 
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 
 internal sealed class BcsAuthService
@@ -115,7 +119,7 @@ internal sealed class BcsAuthService
 
         requestMessage.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["client_id"] = authRequest.ClientId,
+            ["client_id"] = authRequest.ClientId.ToApiValue(),
             ["refresh_token"] = authRequest.RefreshToken,
             ["grant_type"] = authRequest.GrantType,
         });

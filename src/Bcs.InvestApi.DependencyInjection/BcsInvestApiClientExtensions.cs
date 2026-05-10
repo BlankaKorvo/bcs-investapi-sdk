@@ -1,15 +1,10 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.Auth;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.MarketData;
-using Bcs.InvestApi.Portfolio;
-using Bcs.InvestApi.Time;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 public static class BcsInvestApiClientExtensions
@@ -48,7 +43,7 @@ public static class BcsInvestApiClientExtensions
 
     private static void AddClientServices(IServiceCollection services)
     {
-        services.AddSingleton<IBcsClock, BcsSystemClock>();
+        services.TryAddSingleton(TimeProvider.System);
 
         services.AddSingleton<BcsHttpRequestSender>();
         services.AddSingleton<IBcsHttpSender>(sp => sp.GetRequiredService<BcsHttpRequestSender>());
@@ -67,7 +62,7 @@ public static class BcsInvestApiClientExtensions
         services.AddSingleton<BcsTokenManager>(sp => new BcsTokenManager(
             sp.GetRequiredService<BcsAuthService>(),
             GetSettings(sp),
-            sp.GetRequiredService<IBcsClock>()));
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IBcsAccessTokenProvider>(sp => sp.GetRequiredService<BcsTokenManager>());
 
         AddEndpoint(services, (settings, createHttpClient, tokens, sender) =>

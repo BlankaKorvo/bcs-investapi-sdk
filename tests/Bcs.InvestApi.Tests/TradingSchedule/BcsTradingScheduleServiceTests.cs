@@ -2,10 +2,11 @@ namespace Bcs.InvestApi.Tests.TradingSchedule;
 
 using System.Net;
 using Bcs.InvestApi;
+using Bcs.InvestApi.Exceptions;
 using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsTradingScheduleServiceTests

@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO.Enums;
 
 public sealed class BcsInvestApiSettings
 {
@@ -15,9 +15,9 @@ public sealed class BcsInvestApiSettings
     public string? RefreshToken { get; set; }
 
     /// <summary>
-    /// BCS auth client id. Known convenience values are trade-api-read and trade-api-write.
+    /// BCS auth client id. Supported values map to trade-api-read and trade-api-write.
     /// </summary>
-    public string ClientId { get; set; } = BcsAuthClientIds.TradeApiRead;
+    public BcsAuthClientIds ClientId { get; set; } = BcsAuthClientIds.TradeApiRead;
 
     /// <summary>
     /// Full Keycloak token endpoint URL.
@@ -64,10 +64,7 @@ public sealed class BcsInvestApiSettings
             throw new InvalidOperationException($"BCS auth URL must be an absolute HTTPS URI. Actual value: '{AuthUrl}'.");
         }
 
-        if (string.IsNullOrWhiteSpace(ClientId))
-        {
-            throw new InvalidOperationException("BCS auth client_id is not configured. Set Bcs:ClientId.");
-        }
+        _ = ClientId.ToApiValue();
 
         ValidateBaseUrl();
 

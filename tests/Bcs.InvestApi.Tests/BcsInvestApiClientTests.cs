@@ -1,7 +1,8 @@
 namespace Bcs.InvestApi.Tests;
 
 using System.Reflection;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
 using Xunit;
 
@@ -37,6 +38,5 @@ public sealed class BcsInvestApiClientTests
     {
         Assert.False(typeof(BcsTokenManager).IsPublic);
         Assert.False(typeof(IBcsAccessTokenProvider).IsPublic);
-        Assert.False(typeof(BcsAccessTokenInfo).IsPublic);
     }
 }

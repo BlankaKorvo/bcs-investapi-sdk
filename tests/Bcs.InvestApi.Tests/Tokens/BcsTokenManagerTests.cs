@@ -2,10 +2,11 @@ namespace Bcs.InvestApi.Tests.Tokens;
 
 using System.Net;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
-using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -13,19 +14,6 @@ using Xunit;
 public sealed class BcsTokenManagerTests
 {
     private static readonly TimeSpan AsyncGuardTimeout = TimeSpan.FromSeconds(2);
-
-    [Fact]
-    public async Task GetCurrentAccessTokenInfoAsync_WhenNoRefreshHappened_ReturnsNull()
-    {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
-        var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
-        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-
-        var current = await manager.GetCurrentAccessTokenInfoAsync();
-
-        Assert.Null(current);
-        Assert.Equal(0, handler.RequestCount);
-    }
 
     [Fact]
     public void IBcsAccessTokenProvider_InternalSurface_ExposesOnlyAccessToken()
@@ -37,27 +25,6 @@ public sealed class BcsTokenManagerTests
 
         Assert.False(typeof(IBcsAccessTokenProvider).IsPublic);
         Assert.Equal(new[] { nameof(IBcsAccessTokenProvider.GetAccessTokenAsync) }, methodNames);
-    }
-
-    [Fact]
-    public void BcsAccessTokenInfo_InternalProperties_DoNotExposeRefreshTokenAndAreInitOnly()
-    {
-        var publicPropertyNames = typeof(BcsAccessTokenInfo)
-            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Select(property => property.Name)
-            .ToArray();
-        var mutableProperties = typeof(BcsAccessTokenInfo)
-            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(property => property.SetMethod is not null)
-            .Where(property => !property.SetMethod!.ReturnParameter
-                .GetRequiredCustomModifiers()
-                .Contains(typeof(IsExternalInit)))
-            .Select(property => property.Name)
-            .ToArray();
-
-        Assert.False(typeof(BcsAccessTokenInfo).IsPublic);
-        Assert.DoesNotContain(nameof(BcsTokenSet.RefreshToken), publicPropertyNames);
-        Assert.Empty(mutableProperties);
     }
 
     [Fact]
@@ -92,12 +59,12 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenNoCurrentToken_UsesSettingsRefreshTokenAndKeepsTokenInMemory()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
         var accessToken = await manager.GetAccessTokenAsync();
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-1", accessToken);
         Assert.NotNull(current);
@@ -110,7 +77,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentAccessTokenIsStillValid_DoesNotCallAuthEndpoint()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
@@ -125,7 +92,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentAccessTokenRequiresRefresh_UsesCurrentRefreshToken()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var responseCount = 0;
         var handler = new CapturingHttpMessageHandler((_, _) =>
         {
@@ -138,11 +105,11 @@ public sealed class BcsTokenManagerTests
                     : AuthResponseJson("access-2", "current-refresh-3")));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        await manager.RefreshAsync();
+        await manager.GetAccessTokenAsync();
         clock.UtcNow = clock.UtcNow.AddHours(23).AddMinutes(56);
 
         var accessToken = await manager.GetAccessTokenAsync();
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
         Assert.Equal("current-refresh-3", current?.RefreshToken);
@@ -153,7 +120,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenExpired_UsesSettingsRefreshToken()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var responseCount = 0;
         var handler = new CapturingHttpMessageHandler((_, _) =>
         {
@@ -166,7 +133,7 @@ public sealed class BcsTokenManagerTests
                     : AuthResponseJson("access-2", "current-refresh-3")));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        await manager.RefreshAsync();
+        await manager.GetAccessTokenAsync();
         clock.UtcNow = clock.UtcNow.AddSeconds(11);
 
         var accessToken = await manager.GetAccessTokenAsync();
@@ -179,7 +146,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenExpiresWithinSkew_UsesSettingsRefreshToken()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
@@ -192,7 +159,7 @@ public sealed class BcsTokenManagerTests
             });
 
         var accessToken = await manager.GetAccessTokenAsync();
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
         Assert.Equal("current-refresh-2", current?.RefreshToken);
@@ -203,7 +170,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenReturnsInvalidGrant_ThrowsAndClearsCurrentTokenWithoutRetry()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestedRefreshTokens = new List<string>();
         var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
         {
@@ -215,10 +182,15 @@ public sealed class BcsTokenManagerTests
                 : throw new InvalidOperationException("Settings refresh token must not be retried automatically.");
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1"));
+        SetCurrentTokenSet(
+            manager,
+            CreateTokenSet(clock.UtcNow, "access-1", "runtime-refresh-1") with
+            {
+                AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
+            });
 
         var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
         Assert.Equal("Runtime refresh token was revoked.", exception.ErrorDescription);
@@ -230,7 +202,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenSettingsRefreshTokenReturnsInvalidGrant_ThrowsWithoutRetry()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestedRefreshTokens = new List<string>();
         var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
         {
@@ -244,7 +216,7 @@ public sealed class BcsTokenManagerTests
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
         var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
         Assert.Equal("Bootstrap refresh token was rejected.", exception.ErrorDescription);
@@ -256,14 +228,19 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenMatchesSettingsAndReturnsInvalidGrant_CallsAuthOnce()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.BadRequest, InvalidGrantJson("Bootstrap refresh token was rejected."))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        SetCurrentTokenSet(manager, CreateTokenSet(clock.UtcNow, "access-1", "settings-refresh-1"));
+        SetCurrentTokenSet(
+            manager,
+            CreateTokenSet(clock.UtcNow, "access-1", "settings-refresh-1") with
+            {
+                AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
+            });
 
         var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
         Assert.Null(current);
@@ -274,7 +251,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenCurrentRefreshTokenIsEmpty_UsesSettingsRefreshToken()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
@@ -295,7 +272,7 @@ public sealed class BcsTokenManagerTests
             });
 
         var accessToken = await manager.GetAccessTokenAsync();
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
         Assert.Equal("current-refresh-2", current?.RefreshToken);
@@ -304,34 +281,9 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenCurrentAccessTokenIsStillValid_StillCallsAuthEndpoint()
-    {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
-        var responseCount = 0;
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-        {
-            var responseNumber = Interlocked.Increment(ref responseCount);
-
-            return Task.FromResult(JsonResponse(
-                HttpStatusCode.OK,
-                AuthResponseJson($"access-{responseNumber}", $"current-refresh-{responseNumber + 1}")));
-        });
-        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-
-        await manager.RefreshAsync();
-        var tokenSet = await manager.RefreshAsync();
-        var current = await manager.GetCurrentTokenSetAsync();
-
-        Assert.Equal("access-2", tokenSet.AccessToken);
-        Assert.Equal("current-refresh-3", current?.RefreshToken);
-        Assert.Equal(2, handler.RequestCount);
-        Assert.Contains("refresh_token=current-refresh-2", handler.LastRequestContent);
-    }
-
-    [Fact]
     public void Constructor_WhenNoRefreshTokenIsConfigured_ThrowsInvalidOperationException()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
 
         var exception = Assert.Throws<InvalidOperationException>(() => CreateManager(handler, clock, refreshToken: null));
@@ -343,15 +295,15 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenAuthRequestThrowsTransientException_DoesNotSetCurrentToken()
+    public async Task GetAccessTokenAsync_WhenAuthRequestThrowsTransientException_DoesNotSetCurrentToken()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) =>
             throw new HttpRequestException("Connection reset after processing."));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => manager.RefreshAsync().AsTask());
-        var current = await manager.GetCurrentTokenSetAsync();
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => manager.GetAccessTokenAsync().AsTask());
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Contains("Connection reset", exception.Message);
         Assert.Equal(1, handler.RequestCount);
@@ -360,25 +312,25 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenCancellationIsRequestedBeforeRefresh_DoesNotCallAuthEndpoint()
+    public async Task GetAccessTokenAsync_WhenCancellationIsRequestedBeforeRefresh_DoesNotCallAuthEndpoint()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var handler = new CapturingHttpMessageHandler((_, _) => throw new InvalidOperationException("Auth endpoint must not be called."));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
         using var callerCts = new CancellationTokenSource();
         callerCts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => manager.RefreshAsync(callerCts.Token).AsTask());
-        var current = await manager.GetCurrentTokenSetAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => manager.GetAccessTokenAsync(callerCts.Token).AsTask());
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal(0, handler.RequestCount);
         Assert.Null(current);
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenCallerCancelsDuringAuthRequest_CompletesExchangeAndStoresTokenPair()
+    public async Task GetAccessTokenAsync_WhenCallerCancelsDuringAuthRequest_CompletesExchangeAndStoresTokenPair()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var callerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var authCancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -398,13 +350,13 @@ public sealed class BcsTokenManagerTests
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
         using var callerCts = new CancellationTokenSource();
 
-        var refreshTask = manager.RefreshAsync(callerCts.Token).AsTask();
+        var refreshTask = manager.GetAccessTokenAsync(callerCts.Token).AsTask();
         await requestEntered.Task.WaitAsync(AsyncGuardTimeout);
 
         callerCts.Cancel();
         callerCancelled.SetResult();
         await refreshTask.WaitAsync(AsyncGuardTimeout);
-        var current = await manager.GetCurrentTokenSetAsync();
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal(1, handler.RequestCount);
         Assert.False(authCancellationObserved.Task.IsCompleted);
@@ -414,9 +366,9 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenAuthDoesNotComplete_UsesRefreshOperationTimeout()
+    public async Task GetAccessTokenAsync_WhenAuthDoesNotComplete_UsesRefreshOperationTimeout()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var authCancellationObserved = false;
         var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
         {
@@ -436,8 +388,8 @@ public sealed class BcsTokenManagerTests
             tokenRefreshOperationTimeout: TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => manager.RefreshAsync().AsTask().WaitAsync(AsyncGuardTimeout));
-        var current = await manager.GetCurrentTokenSetAsync();
+            () => manager.GetAccessTokenAsync().AsTask().WaitAsync(AsyncGuardTimeout));
+        var current = GetCurrentTokenSet(manager);
 
         Assert.Equal(1, handler.RequestCount);
         Assert.True(authCancellationObserved);
@@ -447,7 +399,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task GetAccessTokenAsync_WhenTenCallersRefreshConcurrently_SendsOneAuthRequest()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
@@ -474,8 +426,9 @@ public sealed class BcsTokenManagerTests
     }
 
     [Fact]
-    public async Task RefreshAsync_WhenResolvedFromDiAndCalledTwice_CreatesHttpClientPerRefreshRequest()
+    public async Task GetAccessTokenAsync_WhenResolvedFromDiAndTokenExpires_CreatesHttpClientPerRefreshRequest()
     {
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var refreshResponseCount = 0;
         var handlers = new List<CapturingHttpMessageHandler>();
         var httpClientFactory = new CountingHttpClientFactory(() =>
@@ -486,7 +439,10 @@ public sealed class BcsTokenManagerTests
 
                 return Task.FromResult(JsonResponse(
                     HttpStatusCode.OK,
-                    AuthResponseJson($"access-{responseNumber}", $"current-refresh-{responseNumber + 1}")));
+                    AuthResponseJson(
+                        $"access-{responseNumber}",
+                        $"current-refresh-{responseNumber + 1}",
+                        expiresIn: responseNumber == 1 ? 10 : 86400)));
             });
 
             handlers.Add(handler);
@@ -502,6 +458,7 @@ public sealed class BcsTokenManagerTests
             settings.AuthUrl = new Uri("https://example.test/token");
             settings.TokenRefreshSkew = TimeSpan.FromMinutes(5);
         });
+        services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<IHttpClientFactory>(httpClientFactory);
 
         await using var provider = services.BuildServiceProvider();
@@ -515,15 +472,16 @@ public sealed class BcsTokenManagerTests
         Assert.NotNull(client);
         Assert.Equal(0, httpClientFactory.CreateClientCallCount);
 
-        var first = await manager.RefreshAsync();
-        var currentAfterFirstRefresh = await manager.GetCurrentTokenSetAsync();
-        var second = await manager.RefreshAsync();
-        var currentAfterSecondRefresh = await manager.GetCurrentTokenSetAsync();
+        var first = await manager.GetAccessTokenAsync();
+        var currentAfterFirstRefresh = GetCurrentTokenSet(manager);
+        timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(11);
+        var second = await manager.GetAccessTokenAsync();
+        var currentAfterSecondRefresh = GetCurrentTokenSet(manager);
         var providerAccessToken = await tokenProvider.GetAccessTokenAsync();
 
-        Assert.Equal("access-1", first.AccessToken);
+        Assert.Equal("access-1", first);
         Assert.Equal("current-refresh-2", currentAfterFirstRefresh?.RefreshToken);
-        Assert.Equal("access-2", second.AccessToken);
+        Assert.Equal("access-2", second);
         Assert.Equal("current-refresh-3", currentAfterSecondRefresh?.RefreshToken);
         Assert.Equal("access-2", providerAccessToken);
         Assert.Equal(2, httpClientFactory.CreateClientCallCount);
@@ -550,7 +508,7 @@ public sealed class BcsTokenManagerTests
     [Fact]
     public async Task CreateFactory_WithRefreshToken_AuthorizesBrokerRequestWithoutExposingTokens()
     {
-        var clock = new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var authUrl = new Uri("https://example.test/token");
         var limitsUrl = new Uri("https://example.test/trade-api-bff-limit/api/v1/limits");
         var authRequestCount = 0;
@@ -603,7 +561,7 @@ public sealed class BcsTokenManagerTests
 
     private static BcsTokenManager CreateManager(
         CapturingHttpMessageHandler handler,
-        FakeBcsClock clock,
+        FakeTimeProvider clock,
         string? refreshToken,
         TimeSpan? tokenRefreshOperationTimeout = null)
     {
@@ -626,6 +584,14 @@ public sealed class BcsTokenManagerTests
             ?? throw new InvalidOperationException("BcsTokenManager current token field was not found.");
 
         field.SetValue(manager, tokenSet);
+    }
+
+    private static BcsTokenSet? GetCurrentTokenSet(BcsTokenManager manager)
+    {
+        var field = typeof(BcsTokenManager).GetField("_currentTokenSet", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("BcsTokenManager current token field was not found.");
+
+        return (BcsTokenSet?)field.GetValue(manager);
     }
 
     private static BcsTokenSet CreateTokenSet(DateTimeOffset nowUtc, string accessToken, string refreshToken) =>

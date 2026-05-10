@@ -1,11 +1,9 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.MarketData;
-using Bcs.InvestApi.Portfolio;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
@@ -87,7 +85,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         string ticker,
         DateTimeOffset startDate,
         DateTimeOffset endDate,
-        string timeFrame,
+        BcsCandleTimeFrames timeFrame,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -121,7 +119,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     }
 
     public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
-        string type,
+        BcsInstrumentTypes type,
         int page,
         int size,
         string? baseAssetTicker = null,

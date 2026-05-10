@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.TradingSchedule;
+namespace Bcs.InvestApi.DTO;
 
 public sealed record BcsDailyTradingScheduleResponse
 {

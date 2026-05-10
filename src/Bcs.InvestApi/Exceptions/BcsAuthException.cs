@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.Auth;
+namespace Bcs.InvestApi.Exceptions;
 
 using System.Net;
 

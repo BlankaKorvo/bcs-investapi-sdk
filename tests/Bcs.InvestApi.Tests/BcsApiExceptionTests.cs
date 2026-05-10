@@ -1,13 +1,13 @@
 namespace Bcs.InvestApi.Tests;
 
 using System.Net;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Exceptions;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.Portfolio;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsApiExceptionTests
@@ -162,7 +162,7 @@ public sealed class BcsApiExceptionTests
         return new BcsTokenManager(
             auth,
             settings,
-            new FakeBcsClock(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero)));
+            new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero)));
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

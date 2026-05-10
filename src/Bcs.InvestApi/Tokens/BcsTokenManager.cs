@@ -1,13 +1,15 @@
 namespace Bcs.InvestApi.Tokens;
 
-using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Time;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.Services;
 
 internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsyncDisposable
 {
     private readonly BcsAuthService _authService;
     private readonly BcsInvestApiSettings _settings;
-    private readonly IBcsClock _clock;
+    private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private BcsTokenSet? _currentTokenSet;
     private bool _disposed;
@@ -15,56 +17,19 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
     internal BcsTokenManager(
         BcsAuthService authService,
         BcsInvestApiSettings settings,
-        IBcsClock? clock = null)
+        TimeProvider? timeProvider = null)
     {
         _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _clock = clock ?? new BcsSystemClock();
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         _settings.ValidateTokenSettings();
     }
 
     public async ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-
-        var current = GetCurrentTokenSetOrNull();
-        var nowUtc = _clock.UtcNow;
-        if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
-        {
-            return current.AccessToken;
-        }
-
-        var tokenSet = await RefreshIfRequiredAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+        var tokenSet = await RefreshIfRequiredAsync(cancellationToken).ConfigureAwait(false);
         return tokenSet.AccessToken;
-    }
-
-    public async ValueTask<BcsAccessTokenInfo> GetAccessTokenInfoAsync(CancellationToken cancellationToken = default)
-    {
-        var tokenSet = await RefreshIfRequiredAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
-        return tokenSet.ToAccessTokenInfo();
-    }
-
-    public ValueTask<BcsAccessTokenInfo?> GetCurrentAccessTokenInfoAsync(CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return ValueTask.FromResult(GetCurrentTokenSetOrNull()?.ToAccessTokenInfo());
-    }
-
-    public async ValueTask<BcsAccessTokenInfo> RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        var tokenSet = await RefreshIfRequiredAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
-        return tokenSet.ToAccessTokenInfo();
-    }
-
-    internal ValueTask<BcsTokenSet?> GetCurrentTokenSetAsync(CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return ValueTask.FromResult(GetCurrentTokenSetOrNull());
     }
 
     public void Dispose()
@@ -90,31 +55,25 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
         return ValueTask.CompletedTask;
     }
 
-    private async ValueTask<BcsTokenSet> RefreshIfRequiredAsync(bool forceRefresh, CancellationToken cancellationToken)
+    private async ValueTask<BcsTokenSet> RefreshIfRequiredAsync(CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
 
-        if (!forceRefresh)
+        var current = GetCurrentTokenSetOrNull();
+        var nowUtc = _timeProvider.GetUtcNow();
+        if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
         {
-            var current = GetCurrentTokenSetOrNull();
-            var nowUtc = _clock.UtcNow;
-            if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
-            {
-                return current;
-            }
+            return current;
         }
 
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!forceRefresh)
+            current = GetCurrentTokenSetOrNull();
+            nowUtc = _timeProvider.GetUtcNow();
+            if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
             {
-                var current = GetCurrentTokenSetOrNull();
-                var nowUtc = _clock.UtcNow;
-                if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
-                {
-                    return current;
-                }
+                return current;
             }
 
             return await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
@@ -127,7 +86,7 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
 
     private async ValueTask<BcsTokenSet> RefreshCoreAsync(CancellationToken cancellationToken)
     {
-        var resolvedRefreshToken = ResolveRefreshTokenForRefresh(_clock.UtcNow);
+        var resolvedRefreshToken = ResolveRefreshTokenForRefresh(_timeProvider.GetUtcNow());
 
         try
         {
@@ -159,7 +118,7 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
             },
             refreshOperationCts.Token).ConfigureAwait(false);
 
-        var tokenSet = BcsTokenSet.FromAuthResponse(response, _clock.UtcNow);
+        var tokenSet = BcsTokenSet.FromAuthResponse(response, _timeProvider.GetUtcNow());
         Volatile.Write(ref _currentTokenSet, tokenSet);
 
         return tokenSet;

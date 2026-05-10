@@ -1,7 +1,6 @@
 using Bcs.InvestApi;
-using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.MarketData;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN");
 if (string.IsNullOrWhiteSpace(refreshToken))

@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.Portfolio;
+namespace Bcs.InvestApi.DTO;
 
 using System.Text.Json.Serialization;
 

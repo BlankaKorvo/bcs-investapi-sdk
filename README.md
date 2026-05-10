@@ -78,7 +78,7 @@ Form fields:
 | Setting | Default | Description |
 |---|---:|---|
 | `RefreshToken` | required | Stable external refresh/bootstrap secret supplied by the host/application layer. |
-| `ClientId` | `trade-api-read` | BCS auth client id: `trade-api-read` or `trade-api-write`. |
+| `ClientId` | `BcsAuthClientIds.TradeApiRead` | BCS auth client id enum. Values map to `trade-api-read` or `trade-api-write`. |
 | `AuthUrl` | BCS token endpoint | Full Keycloak token endpoint URL. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
 | `BaseUrl` | `https://be.broker.ru` | Base URL for BCS HTTP API endpoints. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
 | `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP URLs only for explicit local tests. |
@@ -104,7 +104,7 @@ state is lost.
 
 ```csharp
 using Bcs.InvestApi;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO.Enums;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -119,8 +119,7 @@ var limits = await client.GetLimitsAsync();
 The following calls are independent direct endpoint examples, not an orchestration flow:
 
 ```csharp
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.MarketData;
+using Bcs.InvestApi.DTO.Enums;
 
 var portfolio = await client.GetPortfolioAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
@@ -150,7 +149,7 @@ Install/reference `Bcs.InvestApi.DependencyInjection` only when the host already
 
 ```csharp
 using Bcs.InvestApi;
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO.Enums;
 
 services.AddBcsInvestApiClient(settings =>
 {
@@ -191,7 +190,7 @@ var sberOptions = await client.GetInstrumentsByTypeAsync(
 `GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
 
 ```csharp
-using Bcs.InvestApi.MarketData;
+using Bcs.InvestApi.DTO.Enums;
 
 var candles = await client.GetCandlesAsync(
     classCode: "TQBR",
@@ -234,6 +233,8 @@ exposure explicit in that API.
 BCS non-success auth responses are exposed as `BcsAuthException`:
 
 ```csharp
+using Bcs.InvestApi.Exceptions;
+
 try
 {
     var limits = await client.GetLimitsAsync();

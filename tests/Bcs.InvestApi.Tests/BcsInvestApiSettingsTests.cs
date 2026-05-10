@@ -1,54 +1,42 @@
 namespace Bcs.InvestApi.Tests;
 
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO.Enums;
 using Xunit;
 
 public sealed class BcsInvestApiSettingsTests
 {
     [Fact]
-    public void ValidateTransportSettings_WithUnknownNonEmptyClientId_DoesNotThrow()
+    public void ValidateTransportSettings_WithUnsupportedClientId_ThrowsArgumentOutOfRangeException()
     {
         var settings = CreateSettings();
-        settings.ClientId = "trade-api-future";
+        settings.ClientId = (BcsAuthClientIds)999;
 
-        var exception = Record.Exception(settings.ValidateTransportSettings);
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(settings.ValidateTransportSettings);
 
-        Assert.Null(exception);
+        Assert.Equal("clientId", exception.ParamName);
     }
 
     [Fact]
-    public void CreateFactory_WithUnknownNonEmptyClientId_CreatesClient()
+    public void CreateFactory_WithUnsupportedClientId_ThrowsArgumentOutOfRangeException()
     {
-        using var client = BcsInvestApiClientFactory.Create(new BcsInvestApiSettings
+        var settings = new BcsInvestApiSettings
         {
             RefreshToken = "settings-refresh-1",
-            ClientId = "trade-api-future",
+            ClientId = (BcsAuthClientIds)999,
             AuthUrl = new Uri("https://example.test/token"),
             BaseUrl = new Uri("https://example.test"),
-        });
+        };
 
-        Assert.NotNull(client);
-    }
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => BcsInvestApiClientFactory.Create(settings));
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void ValidateTransportSettings_WithMissingClientId_ThrowsInvalidOperationException(string? clientId)
-    {
-        var settings = CreateSettings();
-        settings.ClientId = clientId!;
-
-        var exception = Assert.Throws<InvalidOperationException>(settings.ValidateTransportSettings);
-
-        Assert.Contains("client_id", exception.Message);
+        Assert.Equal("clientId", exception.ParamName);
     }
 
     [Fact]
-    public void KnownClientIdConstants_RemainAvailable()
+    public void KnownClientIds_MapToWireValues()
     {
-        Assert.Equal("trade-api-read", BcsAuthClientIds.TradeApiRead);
-        Assert.Equal("trade-api-write", BcsAuthClientIds.TradeApiWrite);
+        Assert.Equal("trade-api-read", BcsAuthClientIds.TradeApiRead.ToApiValue());
+        Assert.Equal("trade-api-write", BcsAuthClientIds.TradeApiWrite.ToApiValue());
     }
 
     private static BcsInvestApiSettings CreateSettings() =>

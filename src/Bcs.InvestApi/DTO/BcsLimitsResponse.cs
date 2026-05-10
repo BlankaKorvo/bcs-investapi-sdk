@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.Limits;
+namespace Bcs.InvestApi.DTO;
 
 using System.Text.Json.Serialization;
 

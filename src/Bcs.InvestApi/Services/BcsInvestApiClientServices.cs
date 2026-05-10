@@ -1,14 +1,8 @@
-namespace Bcs.InvestApi;
+namespace Bcs.InvestApi.Services;
 
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.MarketData;
-using Bcs.InvestApi.Portfolio;
-using Bcs.InvestApi.Time;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 
 internal sealed class BcsInvestApiClientServices
 {
@@ -43,7 +37,7 @@ internal sealed class BcsInvestApiClientServices
     internal static BcsInvestApiClientServices Create(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
-        IBcsClock? clock,
+        TimeProvider? timeProvider,
         IBcsHttpSender? requestSender = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -51,7 +45,7 @@ internal sealed class BcsInvestApiClientServices
 
         var sender = requestSender ?? new BcsHttpRequestSender();
         var auth = new BcsAuthService(httpClient, settings, sender);
-        var tokens = new BcsTokenManager(auth, settings, clock);
+        var tokens = new BcsTokenManager(auth, settings, timeProvider);
 
         return new BcsInvestApiClientServices(
             tokens,

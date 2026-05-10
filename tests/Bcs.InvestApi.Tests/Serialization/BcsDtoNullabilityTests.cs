@@ -1,12 +1,8 @@
 namespace Bcs.InvestApi.Tests.Serialization;
 
 using System.Text.Json;
+using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.MarketData;
-using Bcs.InvestApi.Portfolio;
-using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsDtoNullabilityTests

@@ -2,8 +2,9 @@ namespace Bcs.InvestApi.Tests.MarketData;
 
 using System.Net;
 using Bcs.InvestApi;
+using Bcs.InvestApi.DTO.Enums;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.MarketData;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
 using Xunit;
@@ -60,7 +61,7 @@ public sealed class BcsMarketDataServiceTests
         Assert.Equal("TQBR", candles.ClassCode);
         Assert.Equal(new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero), candles.StartDate);
         Assert.Equal(new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero), candles.EndDate);
-        Assert.Equal(BcsCandleTimeFrames.Hour1, candles.TimeFrame);
+        Assert.Equal("H1", candles.TimeFrame);
 
         var bar = Assert.Single(candles.Bars);
         Assert.Equal(new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero), bar.Time);
@@ -72,16 +73,13 @@ public sealed class BcsMarketDataServiceTests
     }
 
     [Theory]
-    [InlineData(null, "SBER", "M1")]
-    [InlineData("", "SBER", "M1")]
-    [InlineData("TQBR", null, "M1")]
-    [InlineData("TQBR", "", "M1")]
-    [InlineData("TQBR", "SBER", null)]
-    [InlineData("TQBR", "SBER", "")]
+    [InlineData(null, "SBER")]
+    [InlineData("", "SBER")]
+    [InlineData("TQBR", null)]
+    [InlineData("TQBR", "")]
     public async Task GetCandlesAsync_WithNullOrEmptyRequiredQueryParameter_Throws(
         string? classCode,
-        string? ticker,
-        string? timeFrame)
+        string? ticker)
     {
         var service = CreateService();
 
@@ -91,53 +89,21 @@ public sealed class BcsMarketDataServiceTests
                 ticker!,
                 new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-                timeFrame!));
+                BcsCandleTimeFrames.Minute1));
     }
 
     [Fact]
-    public async Task GetCandlesAsync_WithUnknownTimeFrame_SendsRequest()
+    public async Task GetCandlesAsync_WithUnsupportedTimeFrame_Throws()
     {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
-        var service = new BcsMarketDataService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
+        var service = CreateService();
 
-        await service.GetCandlesAsync(
-            "TQBR",
-            "SBER",
-            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-            "M2");
-
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T08%3A00%3A00.0000000Z&timeFrame=M2"),
-            handler.LastRequest?.RequestUri);
-    }
-
-    [Fact]
-    public async Task GetCandlesAsync_SendsCallerTimeFrameValue()
-    {
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
-        var service = new BcsMarketDataService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        await service.GetCandlesAsync(
-            "TQBR",
-            "SBER",
-            new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-            " h1 ");
-
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T08%3A00%3A00.0000000Z&timeFrame=%20h1%20"),
-            handler.LastRequest?.RequestUri);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.GetCandlesAsync(
+                "TQBR",
+                "SBER",
+                new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
+                (BcsCandleTimeFrames)999));
     }
 
     [Fact]

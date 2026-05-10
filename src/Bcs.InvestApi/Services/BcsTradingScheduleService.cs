@@ -1,12 +1,12 @@
-namespace Bcs.InvestApi.TradingSchedule;
+namespace Bcs.InvestApi.Services;
 
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsTradingScheduleService
 {
-    private const string DailySchedulePath = "trade-api-information-service/api/v1/trading-schedule/daily-schedule";
-
     private readonly Uri _dailyScheduleUrl;
     private readonly BcsApiRequestExecutor _executor;
 
@@ -36,7 +36,7 @@ internal sealed class BcsTradingScheduleService
         settings.ValidateTransportSettings();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _dailyScheduleUrl = settings.CreateEndpointUrl(DailySchedulePath);
+        _dailyScheduleUrl = settings.CreateEndpointUrl(BcsEndpointPaths.TradingSchedule.DailySchedule);
     }
 
     internal Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(

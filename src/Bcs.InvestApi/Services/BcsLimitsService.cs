@@ -1,12 +1,12 @@
-namespace Bcs.InvestApi.Limits;
+namespace Bcs.InvestApi.Services;
 
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsLimitsService
 {
-    private const string LimitsPath = "trade-api-bff-limit/api/v1/limits";
-
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _limitsUrl;
 
@@ -36,7 +36,7 @@ internal sealed class BcsLimitsService
         settings.ValidateTransportSettings();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _limitsUrl = settings.CreateEndpointUrl(LimitsPath);
+        _limitsUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Limits);
     }
 
     internal Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default) =>

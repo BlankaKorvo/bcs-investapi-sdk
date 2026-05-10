@@ -1,17 +1,16 @@
-namespace Bcs.InvestApi.Instruments;
+namespace Bcs.InvestApi.Services;
 
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsInstrumentsService
 {
-    private const string InstrumentsByIsinsPath = "trade-api-information-service/api/v1/instruments/by-isins";
-    private const string InstrumentsByTickersPath = "trade-api-information-service/api/v1/instruments/by-tickers";
-    private const string InstrumentsByTypePath = "trade-api-information-service/api/v1/instruments/by-type";
-
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _instrumentsByIsinsUrl;
     private readonly Uri _instrumentsByTickersUrl;
@@ -43,9 +42,9 @@ internal sealed class BcsInstrumentsService
         settings.ValidateTransportSettings();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _instrumentsByIsinsUrl = settings.CreateEndpointUrl(InstrumentsByIsinsPath);
-        _instrumentsByTickersUrl = settings.CreateEndpointUrl(InstrumentsByTickersPath);
-        _instrumentsByTypeUrl = settings.CreateEndpointUrl(InstrumentsByTypePath);
+        _instrumentsByIsinsUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Instruments.ByIsins);
+        _instrumentsByTickersUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Instruments.ByTickers);
+        _instrumentsByTypeUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Instruments.ByType);
     }
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
@@ -89,18 +88,18 @@ internal sealed class BcsInstrumentsService
     }
 
     internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
-        string type,
+        BcsInstrumentTypes type,
         int page,
         int size,
         string? baseAssetTicker = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(type);
+        var typeValue = type.ToApiValue();
         ValidatePage(page);
         ValidateSize(size);
 
         return await SendTypePageAsync(
-            type,
+            typeValue,
             baseAssetTicker,
             page,
             size,
@@ -301,8 +300,4 @@ internal sealed class BcsInstrumentsService
                 "Page size must be greater than or equal to one.");
         }
     }
-
-    private sealed record BcsInstrumentsByIsinsRequest(IReadOnlyList<string> Isins);
-
-    private sealed record BcsInstrumentsByTickersRequest(IReadOnlyList<string> Tickers);
 }

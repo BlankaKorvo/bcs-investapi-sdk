@@ -1,13 +1,14 @@
-namespace Bcs.InvestApi.MarketData;
+namespace Bcs.InvestApi.Services;
 
 using System.Globalization;
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.DTO.Enums;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsMarketDataService
 {
-    private const string CandlesPath = "trade-api-market-data-connector/api/v1/candles-chart";
-
     private readonly Uri _candlesUrl;
     private readonly BcsApiRequestExecutor _executor;
 
@@ -37,7 +38,7 @@ internal sealed class BcsMarketDataService
         settings.ValidateTransportSettings();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _candlesUrl = settings.CreateEndpointUrl(CandlesPath);
+        _candlesUrl = settings.CreateEndpointUrl(BcsEndpointPaths.MarketData.Candles);
     }
 
     internal Task<BcsCandlesResponse> GetCandlesAsync(
@@ -45,12 +46,12 @@ internal sealed class BcsMarketDataService
         string ticker,
         DateTimeOffset startDate,
         DateTimeOffset endDate,
-        string timeFrame,
+        BcsCandleTimeFrames timeFrame,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(classCode);
         ArgumentException.ThrowIfNullOrEmpty(ticker);
-        ArgumentException.ThrowIfNullOrEmpty(timeFrame);
+        var timeFrameValue = timeFrame.ToApiValue();
         ValidateDateRange(startDate, endDate);
 
         return _executor.SendJsonAsync<BcsCandlesResponse>(
@@ -60,7 +61,7 @@ internal sealed class BcsMarketDataService
                 ticker,
                 startDate,
                 endDate,
-                timeFrame),
+                timeFrameValue),
             "candles-chart",
             cancellationToken);
     }

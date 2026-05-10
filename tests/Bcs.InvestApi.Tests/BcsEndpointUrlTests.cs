@@ -1,14 +1,11 @@
 namespace Bcs.InvestApi.Tests;
 
 using System.Net;
+using Bcs.InvestApi.DTO.Enums;
 using Bcs.InvestApi.Infrastructure;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.Limits;
-using Bcs.InvestApi.MarketData;
-using Bcs.InvestApi.Portfolio;
+using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;
-using Bcs.InvestApi.TradingSchedule;
 using Xunit;
 
 public sealed class BcsEndpointUrlTests
@@ -186,7 +183,7 @@ public sealed class BcsEndpointUrlTests
 
         Assert.Equal(
             new Uri("http://localhost:8080/trade-api-bff-limit/api/v1/limits"),
-            settings.CreateEndpointUrl("trade-api-bff-limit/api/v1/limits"));
+            settings.CreateEndpointUrl(BcsEndpointPaths.Limits));
     }
 
     private static BcsInvestApiSettings CreateSettings(Uri baseUrl) =>

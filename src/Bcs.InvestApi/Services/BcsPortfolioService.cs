@@ -1,12 +1,12 @@
-namespace Bcs.InvestApi.Portfolio;
+namespace Bcs.InvestApi.Services;
 
+using Bcs.InvestApi;
+using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
 internal sealed class BcsPortfolioService
 {
-    private const string PortfolioPath = "trade-api-bff-portfolio/api/v1/portfolio";
-
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _portfolioUrl;
 
@@ -36,7 +36,7 @@ internal sealed class BcsPortfolioService
         settings.ValidateTransportSettings();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _portfolioUrl = settings.CreateEndpointUrl(PortfolioPath);
+        _portfolioUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Portfolio);
     }
 
     internal async Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default) =>

@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
-using Bcs.InvestApi.Auth;
+using Bcs.InvestApi.DTO;
 
 internal sealed record BcsTokenSet
 {
@@ -64,14 +64,6 @@ internal sealed record BcsTokenSet
     internal bool HasUsableRefreshToken(DateTimeOffset nowUtc, TimeSpan refreshSkew) =>
         !string.IsNullOrWhiteSpace(RefreshToken) &&
         !IsRefreshTokenExpired(nowUtc, refreshSkew);
-
-    internal BcsAccessTokenInfo ToAccessTokenInfo() =>
-        new()
-        {
-            AccessToken = AccessToken,
-            AccessTokenExpiresAtUtc = AccessTokenExpiresAtUtc,
-            TokenType = string.IsNullOrWhiteSpace(TokenType) ? "Bearer" : TokenType,
-        };
 
     internal static BcsTokenSet FromAuthResponse(BcsAuthResponse response, DateTimeOffset receivedAtUtc)
     {
