@@ -67,15 +67,6 @@ if (string.IsNullOrWhiteSpace(ticker))
     ticker = "SBER";
 }
 
-//var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
-//Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
-
-//foreach (var interval in schedule.DailySchedule)
-//{
-//    Console.WriteLine(
-//        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
-//}
-
 var candlesEnd = DateTimeOffset.UtcNow;
 var candlesStart = candlesEnd.AddDays(-1);
 var candles = await client.GetCandlesAsync(
@@ -90,6 +81,15 @@ foreach (var bar in candles.Bars.Take(10))
 {
     Console.WriteLine(
         $"  {bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
+}
+
+var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
+Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
+
+foreach (var interval in schedule.DailySchedule)
+{
+    Console.WriteLine(
+        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
 }
 
 return 0;

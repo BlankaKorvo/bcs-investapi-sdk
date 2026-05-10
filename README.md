@@ -2,8 +2,10 @@
 
 Thin C# SDK for BCS Trade API.
 
-Bcs.InvestApi is thin transport + DTO + auth helper. It is not an application layer, token daemon, trading system,
-portfolio model, or strategy framework.
+Bcs.InvestApi is a raw endpoint client: transport, DTOs, and auth helper only.
+
+The SDK does not aggregate, normalize, map, paginate, trade, schedule, or interpret data. It is not an application
+layer, token daemon, trading system, portfolio model, or strategy framework.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the boundary rules this package is expected to keep.
 
@@ -21,13 +23,14 @@ net10.0
 
 ## SDK Boundary
 
-- SDK is thin transport + DTO + auth helper.
-- Application layer owns business logic.
-- Raw endpoints stay in SDK, including portfolio, because they are direct BCS server endpoints.
+- Endpoint methods perform one BCS server request per call.
+- Raw endpoint DTOs stay raw. Callers own business logic, domain mapping, aggregation, normalization, pagination loops,
+  trading decisions, scheduling, retry policy, persistence, and operational recovery.
+- Raw endpoints stay in SDK, including portfolio, because they are direct BCS server endpoints rather than SDK-level
+  portfolio modeling.
 - No disk token persistence.
 - No automatic refresh-token retry policy around the refresh-token grant.
-- No auto-pagination. Endpoint methods perform one server request per call.
-- No strategy/domain models, portfolio aggregation, DTO-to-domain mapping, repositories, stores, backtests, or trading systems.
+- No strategy/domain models, repositories, stores, backtests, hosted services, or trading systems.
 
 ## Features
 
@@ -36,8 +39,19 @@ net10.0
 - Lazy access-token refresh before token expiration.
 - Internal token manager that authorizes SDK HTTP requests.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments by ISIN, instruments by ticker,
-  instruments by type, and historical candles.
+- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, and historical candles.
+
+## Endpoint Catalog
+
+| Method | BCS endpoint |
+|---|---|
+| `GetLimitsAsync` | `GET /trade-api-bff-limit/api/v1/limits` |
+| `GetPortfolioAsync` | `GET /trade-api-bff-portfolio/api/v1/portfolio` |
+| `GetDailyTradingScheduleAsync` | `GET /trade-api-information-service/api/v1/trading-schedule/daily-schedule` |
+| `GetInstrumentsByIsinsAsync` | `POST /trade-api-information-service/api/v1/instruments/by-isins` |
+| `GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
+| `GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
+| `GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
 
 ## Auth Endpoint
 
@@ -74,29 +88,23 @@ Form fields:
 
 ## Authorization Behavior
 
-The SDK keeps the runtime token pair in private in-memory state:
+The SDK keeps the runtime token pair in private in-memory state. The host supplies one stable external
+refresh/bootstrap secret through `BcsInvestApiSettings.RefreshToken` or `BcsInvestApiClientFactory.Create(...)`.
 
-- Construction, factory creation, and DI resolution validate settings and require `BcsInvestApiSettings.RefreshToken`.
-- Before each broker API request, the SDK obtains a usable access token internally.
-- On the first authorized request it uses `BcsInvestApiSettings.RefreshToken`.
-- After successful authorization it updates the in-memory token pair.
-- Later refresh calls use the in-memory rotated `refresh_token` while it is non-empty and valid under `TokenRefreshSkew`.
-- If the in-memory refresh token is missing or expires within `TokenRefreshSkew`, refresh uses `BcsInvestApiSettings.RefreshToken`.
-- Refresh-token grant failures are propagated as `BcsAuthException`; the SDK does not apply retry policies, Polly,
-  backoff, or hidden resilience wrappers around the grant.
-- If the access token expires soon, the next broker API request calls the auth endpoint under a refresh gate.
-- Concurrent callers re-check the in-memory token after entering the refresh gate.
-- If the process exits or crashes, in-memory token state is lost.
+Before each broker API request, the SDK obtains a usable access token internally. The first authorized request uses the
+configured external secret. Successful auth updates the in-memory token pair. Later refresh calls use the in-memory
+rotated `refresh_token` while it is usable; if it is missing or expires within `TokenRefreshSkew`, the SDK uses the
+configured external secret again.
 
-Durable token storage, retry policy, operational recovery, and secret rotation belong in the host/application layer.
+Refresh-token grant failures are propagated as `BcsAuthException`. The SDK does not apply retry policies, Polly,
+backoff, disk token persistence, or hidden resilience wrappers around the grant. If the process exits, in-memory token
+state is lost.
 
-## Factory Usage
+## Direct Usage
 
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.Auth;
-using Bcs.InvestApi.Instruments;
-using Bcs.InvestApi.MarketData;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -106,6 +114,14 @@ await using var client = BcsInvestApiClientFactory.Create(
     clientId: BcsAuthClientIds.TradeApiRead);
 
 var limits = await client.GetLimitsAsync();
+```
+
+The following calls are independent direct endpoint examples, not an orchestration flow:
+
+```csharp
+using Bcs.InvestApi.Instruments;
+using Bcs.InvestApi.MarketData;
+
 var portfolio = await client.GetPortfolioAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
 var instruments = await client.GetInstrumentsByIsinsAsync(
@@ -143,7 +159,8 @@ services.AddBcsInvestApiClient(settings =>
 });
 ```
 
-`AddBcsInvestApiClient` registers the facade and internal token services. Endpoint usage is the same as factory usage.
+`AddBcsInvestApiClient` registers the facade and internal token services. Endpoint usage is the same direct method usage
+shown above.
 
 ## Pagination
 
@@ -185,6 +202,22 @@ var candles = await client.GetCandlesAsync(
 ```
 
 BCS allows at most 1440 candles in one request.
+
+## Sample
+
+`sample/Bcs.InvestApi.Sample` is a minimal smoke-test console for raw endpoint calls. It is not recommended application
+architecture and intentionally does not show orchestration, hosting, logging, retries, background services, or
+portfolio/instrument/candle workflows.
+
+Select one endpoint with the first command-line argument or `BCS_SAMPLE_ENDPOINT`:
+
+```bash
+BCS_SAMPLE_ENDPOINT=limits dotnet run --project sample/Bcs.InvestApi.Sample
+dotnet run --project sample/Bcs.InvestApi.Sample -- candles
+```
+
+Supported values are `limits`, `portfolio`, `candles`, and `instruments-by-ticker`. The sample requires
+`BCS_REFRESH_TOKEN` and does not include real tokens.
 
 ## Raw Auth Boundary
 
