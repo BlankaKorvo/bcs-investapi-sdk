@@ -16,15 +16,22 @@ public sealed class BcsTokenManagerTests
     private static readonly TimeSpan AsyncGuardTimeout = TimeSpan.FromSeconds(2);
 
     [Fact]
-    public void IBcsAccessTokenProvider_InternalSurface_ExposesOnlyAccessToken()
+    public void IBcsAccessTokenProvider_InternalSurface_ExposesAccessTokenAndInvalidation()
     {
         var methodNames = typeof(IBcsAccessTokenProvider)
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Select(method => method.Name)
+            .Order(StringComparer.Ordinal)
             .ToArray();
 
         Assert.False(typeof(IBcsAccessTokenProvider).IsPublic);
-        Assert.Equal(new[] { nameof(IBcsAccessTokenProvider.GetAccessTokenAsync) }, methodNames);
+        Assert.Equal(
+            new[]
+            {
+                nameof(IBcsAccessTokenProvider.GetAccessTokenAsync),
+                nameof(IBcsAccessTokenProvider.InvalidateAccessToken),
+            }.Order(StringComparer.Ordinal),
+            methodNames);
     }
 
     [Fact]

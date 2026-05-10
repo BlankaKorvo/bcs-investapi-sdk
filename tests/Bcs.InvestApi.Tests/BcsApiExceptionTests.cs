@@ -84,6 +84,67 @@ public sealed class BcsApiExceptionTests
     }
 
     [Fact]
+    public async Task GetLimitsAsync_InvalidTokenUnauthorized_InvalidatesAccessTokenWithoutRetry()
+    {
+        const string invalidTokenJson = """{"error":"invalid_token"}""";
+
+        var settings = CreateSettings();
+        var authRefreshTokens = new List<string>();
+        var limitAccessTokens = new List<string?>();
+        var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri == AuthUrl)
+            {
+                authRefreshTokens.Add(await ReadFormValueAsync(
+                    request,
+                    "refresh_token",
+                    cancellationToken));
+
+                return JsonResponse(
+                    HttpStatusCode.OK,
+                    authRefreshTokens.Count == 1
+                        ? AuthResponseJson("access-1", "runtime-refresh-2")
+                        : AuthResponseJson("access-2", "runtime-refresh-3"));
+            }
+
+            if (request.RequestUri == LimitsUrl)
+            {
+                limitAccessTokens.Add(request.Headers.Authorization?.Parameter);
+
+                if (limitAccessTokens.Count == 1)
+                {
+                    var invalidTokenResponse = JsonResponse(HttpStatusCode.Unauthorized, invalidTokenJson);
+                    invalidTokenResponse.Headers.WwwAuthenticate.ParseAdd("Bearer error=\"invalid_token\"");
+                    return invalidTokenResponse;
+                }
+
+                return JsonResponse(HttpStatusCode.OK, "{}");
+            }
+
+            throw new InvalidOperationException($"Unexpected request URI '{request.RequestUri}'.");
+        });
+
+        using var httpClient = new HttpClient(handler);
+        await using var tokens = CreateTokenManager(settings, httpClient);
+        var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+
+        Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
+        Assert.Equal(invalidTokenJson, exception.ResponseBody);
+        Assert.Equal(new[] { "access-1" }, limitAccessTokens);
+        Assert.Equal(new[] { "settings-refresh-1" }, authRefreshTokens);
+        Assert.Equal(2, handler.RequestCount);
+
+        var limits = await service.GetLimitsAsync();
+
+        Assert.Empty(limits.DepoLimit);
+        Assert.Equal(new[] { "access-1", "access-2" }, limitAccessTokens);
+        Assert.Equal(new[] { "settings-refresh-1", "runtime-refresh-2" }, authRefreshTokens);
+        Assert.Equal(4, handler.RequestCount);
+    }
+
+    [Fact]
     public async Task GetPortfolioAsync_ErrorStatus_ThrowsBcsApiExceptionWithResponseBody()
     {
         const string errorJson = """
@@ -170,6 +231,22 @@ public sealed class BcsApiExceptionTests
             Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
         };
 
+    private static async Task<string> ReadFormValueAsync(
+        HttpRequestMessage request,
+        string key,
+        CancellationToken cancellationToken)
+    {
+        var content = request.Content is null
+            ? string.Empty
+            : await request.Content.ReadAsStringAsync(cancellationToken);
+        var valuePrefix = key + "=";
+        var encodedValue = content
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Single(value => value.StartsWith(valuePrefix, StringComparison.Ordinal));
+
+        return WebUtility.UrlDecode(encodedValue[valuePrefix.Length..]) ?? string.Empty;
+    }
+
     private static string AuthResponseJson(
         string accessToken,
         string refreshToken) =>
@@ -197,5 +274,9 @@ public sealed class BcsApiExceptionTests
 
         public ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(_accessToken);
+
+        public void InvalidateAccessToken(string rejectedAccessToken)
+        {
+        }
     }
 }

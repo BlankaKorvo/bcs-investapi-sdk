@@ -1,6 +1,7 @@
 namespace Bcs.InvestApi.Infrastructure;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Tokens;
@@ -105,6 +106,12 @@ internal sealed class BcsApiRequestExecutor
             .ReadAsStringAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        if (response.StatusCode == HttpStatusCode.Unauthorized &&
+            IsInvalidToken(response))
+        {
+            _tokens.InvalidateAccessToken(accessToken);
+        }
+
         EnsureSuccess(response.StatusCode, responseBody, endpointName);
         return responseBody;
     }
@@ -118,5 +125,34 @@ internal sealed class BcsApiRequestExecutor
         }
 
         throw new BcsApiException(statusCode, responseBody, endpointName);
+    }
+
+    private static bool IsInvalidToken(HttpResponseMessage response) =>
+        response.Headers.WwwAuthenticate.Any(IsInvalidTokenChallenge);
+
+    private static bool IsInvalidTokenChallenge(AuthenticationHeaderValue challenge)
+    {
+        if (!string.Equals(challenge.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(challenge.Parameter))
+        {
+            return false;
+        }
+
+        return challenge.Parameter
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(IsInvalidTokenParameter);
+    }
+
+    private static bool IsInvalidTokenParameter(string parameter)
+    {
+        const string prefix = "error=";
+
+        if (!parameter.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var value = parameter[prefix.Length..].Trim().Trim('"');
+        return string.Equals(value, "invalid_token", StringComparison.Ordinal);
     }
 }

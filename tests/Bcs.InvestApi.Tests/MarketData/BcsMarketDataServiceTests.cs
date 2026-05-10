@@ -194,5 +194,9 @@ public sealed class BcsMarketDataServiceTests
 
         public ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(_accessToken);
+
+        public void InvalidateAccessToken(string rejectedAccessToken)
+        {
+        }
     }
 }

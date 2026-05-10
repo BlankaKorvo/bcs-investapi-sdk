@@ -615,5 +615,9 @@ public sealed class BcsInstrumentsServiceTests
 
         public ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(_accessToken);
+
+        public void InvalidateAccessToken(string rejectedAccessToken)
+        {
+        }
     }
 }

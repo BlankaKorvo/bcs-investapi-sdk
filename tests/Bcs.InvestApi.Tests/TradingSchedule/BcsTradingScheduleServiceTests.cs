@@ -169,5 +169,9 @@ public sealed class BcsTradingScheduleServiceTests
 
         public ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(_accessToken);
+
+        public void InvalidateAccessToken(string rejectedAccessToken)
+        {
+        }
     }
 }

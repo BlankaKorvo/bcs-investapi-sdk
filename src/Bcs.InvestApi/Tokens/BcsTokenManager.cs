@@ -31,6 +31,36 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
         return tokenSet.AccessToken;
     }
 
+    public void InvalidateAccessToken(string rejectedAccessToken)
+    {
+        if (string.IsNullOrEmpty(rejectedAccessToken))
+        {
+            return;
+        }
+
+        while (true)
+        {
+            var current = GetCurrentTokenSetOrNull();
+            if (current is null ||
+                !string.Equals(current.AccessToken, rejectedAccessToken, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var invalidated = current with
+            {
+                AccessTokenExpiresAtUtc = DateTimeOffset.MinValue,
+            };
+
+            if (ReferenceEquals(
+                Interlocked.CompareExchange(ref _currentTokenSet, invalidated, current),
+                current))
+            {
+                return;
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

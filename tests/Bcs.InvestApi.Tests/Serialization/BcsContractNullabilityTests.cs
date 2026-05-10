@@ -355,10 +355,16 @@ public sealed class BcsContractNullabilityTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var path = Path.Combine(directory.FullName, "HTTP.postman_collection.json");
-            if (File.Exists(path))
+            var directPath = Path.Combine(directory.FullName, "HTTP.postman_collection.json");
+            if (File.Exists(directPath))
             {
-                return path;
+                return directPath;
+            }
+
+            var docsPath = Path.Combine(directory.FullName, "Docs", "HTTP.postman_collection.json");
+            if (File.Exists(docsPath))
+            {
+                return docsPath;
             }
 
             directory = directory.Parent;
