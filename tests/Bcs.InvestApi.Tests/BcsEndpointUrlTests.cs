@@ -31,6 +31,27 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
+    public async Task GetLimitsAsync_WithUnsupportedSettingsClientId_UsesConfiguredBaseUrl()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root"));
+        settings.ClientId = (BcsAuthClientIds)999;
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsLimitsService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetLimitsAsync();
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-limit/api/v1/limits"),
+            handler.LastRequest.RequestUri);
+    }
+
+    [Fact]
     public async Task GetPortfolioAsync_UsesConfiguredBaseUrl()
     {
         var settings = CreateSettings(new Uri("https://mock.example/root/"));
@@ -164,11 +185,11 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
-    public void ValidateTransportSettings_WithHttpBaseUrl_ThrowsByDefault()
+    public void ValidateBaseUrl_WithHttpBaseUrl_ThrowsByDefault()
     {
         var settings = CreateSettings(new Uri("http://localhost:8080"));
 
-        var exception = Assert.Throws<InvalidOperationException>(settings.ValidateTransportSettings);
+        var exception = Assert.Throws<InvalidOperationException>(settings.ValidateBaseUrl);
 
         Assert.Contains("BCS base URL", exception.Message);
         Assert.Contains("absolute HTTPS URI", exception.Message);

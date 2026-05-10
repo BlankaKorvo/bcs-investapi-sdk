@@ -22,7 +22,8 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _timeProvider = timeProvider ?? TimeProvider.System;
 
-        _settings.ValidateTokenSettings();
+        _settings.ValidateRefreshToken();
+        _settings.ValidateTokenTimings();
     }
 
     public async ValueTask<string> GetAccessTokenAsync(CancellationToken cancellationToken = default)

@@ -6,12 +6,12 @@ using Xunit;
 public sealed class BcsInvestApiSettingsTests
 {
     [Fact]
-    public void ValidateTransportSettings_WithUnsupportedClientId_ThrowsArgumentOutOfRangeException()
+    public void ValidateAuthClientId_WithUnsupportedClientId_ThrowsArgumentOutOfRangeException()
     {
         var settings = CreateSettings();
         settings.ClientId = (BcsAuthClientIds)999;
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(settings.ValidateTransportSettings);
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(settings.ValidateAuthClientId);
 
         Assert.Equal("clientId", exception.ParamName);
     }

@@ -35,7 +35,7 @@ internal sealed class BcsMarketDataService
         BcsApiRequestExecutor executor)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
+        settings.ValidateBaseUrl();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _candlesUrl = settings.CreateEndpointUrl(BcsEndpointPaths.MarketData.Candles);

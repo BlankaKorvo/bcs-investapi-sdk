@@ -7,7 +7,7 @@ internal static class BcsInvestApiHttpClientConfiguration
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
 
-        settings.ValidateTransportSettings();
+        settings.ValidateHttpTimeout();
 
         if (settings.Timeout is not null)
         {

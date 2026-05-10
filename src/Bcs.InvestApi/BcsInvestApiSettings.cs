@@ -51,54 +51,11 @@ public sealed class BcsInvestApiSettings
     /// </summary>
     public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
-    internal void ValidateTransportSettings()
-    {
-        if (AuthUrl is null)
-        {
-            throw new InvalidOperationException("BCS auth URL is not configured. Set Bcs:AuthUrl.");
-        }
-
-        var isAllowedInsecureHttp = AuthUrl.Scheme == Uri.UriSchemeHttp && AllowInsecureHttpForTesting;
-        if (!AuthUrl.IsAbsoluteUri || (AuthUrl.Scheme != Uri.UriSchemeHttps && !isAllowedInsecureHttp))
-        {
-            throw new InvalidOperationException($"BCS auth URL must be an absolute HTTPS URI. Actual value: '{AuthUrl}'.");
-        }
-
-        _ = ClientId.ToApiValue();
-
-        ValidateBaseUrl();
-
-        if (Timeout is not null && Timeout <= TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
-        }
-
-    }
-
-    internal void ValidateTokenSettings()
-    {
-        ValidateTransportSettings();
-        _ = GetRequiredRefreshToken();
-
-        if (TokenRefreshSkew < TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS token refresh skew must be greater than or equal to zero.");
-        }
-
-        if (TokenRefreshOperationTimeout <= TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("BCS token refresh operation timeout must be greater than zero.");
-        }
-    }
-
     internal string GetRequiredRefreshToken()
     {
-        if (string.IsNullOrWhiteSpace(RefreshToken))
-        {
-            throw new InvalidOperationException("BCS refresh token is not configured. Set Bcs:RefreshToken or pass refresh token explicitly.");
-        }
+        ValidateRefreshToken();
 
-        return RefreshToken;
+        return RefreshToken!;
     }
 
     internal Uri CreateEndpointUrl(string relativePath)
@@ -109,7 +66,7 @@ public sealed class BcsInvestApiSettings
         return new Uri(EnsureTrailingSlash(BaseUrl), relativePath);
     }
 
-    private void ValidateBaseUrl()
+    internal void ValidateBaseUrl()
     {
         if (BaseUrl is null)
         {
@@ -125,6 +82,54 @@ public sealed class BcsInvestApiSettings
         if (!string.IsNullOrEmpty(BaseUrl.Query) || !string.IsNullOrEmpty(BaseUrl.Fragment))
         {
             throw new InvalidOperationException($"BCS base URL must not contain query or fragment components. Actual value: '{BaseUrl}'.");
+        }
+    }
+
+    internal void ValidateAuthUrl()
+    {
+        if (AuthUrl is null)
+        {
+            throw new InvalidOperationException("BCS auth URL is not configured. Set Bcs:AuthUrl.");
+        }
+
+        var isAllowedInsecureHttp = AuthUrl.Scheme == Uri.UriSchemeHttp && AllowInsecureHttpForTesting;
+        if (!AuthUrl.IsAbsoluteUri || (AuthUrl.Scheme != Uri.UriSchemeHttps && !isAllowedInsecureHttp))
+        {
+            throw new InvalidOperationException($"BCS auth URL must be an absolute HTTPS URI. Actual value: '{AuthUrl}'.");
+        }
+    }
+
+    internal void ValidateAuthClientId()
+    {
+        _ = ClientId.ToApiValue();
+    }
+
+    internal void ValidateRefreshToken()
+    {
+        if (string.IsNullOrWhiteSpace(RefreshToken))
+        {
+            throw new InvalidOperationException("BCS refresh token is not configured. Set Bcs:RefreshToken or pass refresh token explicitly.");
+        }
+    }
+
+    internal void ValidateTokenTimings()
+    {
+        if (TokenRefreshSkew < TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("BCS token refresh skew must be greater than or equal to zero.");
+        }
+
+        if (TokenRefreshOperationTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("BCS token refresh operation timeout must be greater than zero.");
+        }
+    }
+
+    internal void ValidateHttpTimeout()
+    {
+        if (Timeout is not null && Timeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("BCS HTTP timeout must be greater than zero.");
         }
     }
 

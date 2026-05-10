@@ -52,7 +52,8 @@ internal sealed class BcsAuthService
         _disposeHttpClientAfterRequest = disposeHttpClientAfterRequest;
         _requestSender = requestSender ?? new BcsHttpRequestSender();
 
-        _settings.ValidateTransportSettings();
+        _settings.ValidateAuthUrl();
+        _settings.ValidateAuthClientId();
     }
 
     internal async Task<BcsAuthResponse> GetAccessTokenAsync(

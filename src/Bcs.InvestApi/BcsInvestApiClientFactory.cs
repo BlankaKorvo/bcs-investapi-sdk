@@ -30,7 +30,8 @@ public static class BcsInvestApiClientFactory
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTokenSettings();
+        settings.ValidateRefreshToken();
+        settings.ValidateTokenTimings();
 
         var httpClient = httpMessageHandler is null
             ? new HttpClient()

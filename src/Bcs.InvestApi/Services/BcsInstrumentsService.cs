@@ -39,7 +39,7 @@ internal sealed class BcsInstrumentsService
         BcsApiRequestExecutor executor)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
+        settings.ValidateBaseUrl();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _instrumentsByIsinsUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Instruments.ByIsins);

@@ -33,7 +33,7 @@ internal sealed class BcsPortfolioService
         BcsApiRequestExecutor executor)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        settings.ValidateTransportSettings();
+        settings.ValidateBaseUrl();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _portfolioUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Portfolio);
