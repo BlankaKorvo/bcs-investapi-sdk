@@ -76,6 +76,8 @@ public static class BcsInvestApiClientExtensions
             new BcsInstrumentsService(settings, createHttpClient, tokens, sender));
         AddEndpoint(services, (settings, createHttpClient, tokens, sender) =>
             new BcsMarketDataService(settings, createHttpClient, tokens, sender));
+        AddEndpoint(services, (settings, createHttpClient, tokens, sender) =>
+            new BcsOrdersService(settings, createHttpClient, tokens, sender));
 
         services.AddSingleton(sp => new BcsInvestApiClient(
             sp.GetRequiredService<BcsTokenManager>(),
@@ -83,7 +85,8 @@ public static class BcsInvestApiClientExtensions
             sp.GetRequiredService<BcsPortfolioService>(),
             sp.GetRequiredService<BcsTradingScheduleService>(),
             sp.GetRequiredService<BcsInstrumentsService>(),
-            sp.GetRequiredService<BcsMarketDataService>()));
+            sp.GetRequiredService<BcsMarketDataService>(),
+            sp.GetRequiredService<BcsOrdersService>()));
     }
 
     private static void AddEndpoint<TService>(

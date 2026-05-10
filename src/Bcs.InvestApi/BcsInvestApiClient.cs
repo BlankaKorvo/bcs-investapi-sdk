@@ -4,6 +4,7 @@ using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Instruments;
 using Bcs.InvestApi.Contracts.Limits;
 using Bcs.InvestApi.Contracts.MarketData;
+using Bcs.InvestApi.Contracts.Orders;
 using Bcs.InvestApi.Contracts.Portfolio;
 using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Services;
@@ -20,6 +21,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     private readonly BcsTradingScheduleService _tradingSchedule;
     private readonly BcsInstrumentsService _instruments;
     private readonly BcsMarketDataService _marketData;
+    private readonly BcsOrdersService _orders;
     private readonly bool _ownsTokenManager;
     private readonly IDisposable? _ownedTransport;
     private bool _disposed;
@@ -30,7 +32,8 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsPortfolioService portfolio,
         BcsTradingScheduleService tradingSchedule,
         BcsInstrumentsService instruments,
-        BcsMarketDataService marketData)
+        BcsMarketDataService marketData,
+        BcsOrdersService orders)
         : this(
             tokens,
             limits,
@@ -38,6 +41,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
             tradingSchedule,
             instruments,
             marketData,
+            orders,
             ownsTokenManager: false,
             ownedTransport: null)
     {
@@ -50,6 +54,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsTradingScheduleService tradingSchedule,
         BcsInstrumentsService instruments,
         BcsMarketDataService marketData,
+        BcsOrdersService orders,
         bool ownsTokenManager,
         IDisposable? ownedTransport)
     {
@@ -59,6 +64,7 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         _tradingSchedule = tradingSchedule ?? throw new ArgumentNullException(nameof(tradingSchedule));
         _instruments = instruments ?? throw new ArgumentNullException(nameof(instruments));
         _marketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
+        _orders = orders ?? throw new ArgumentNullException(nameof(orders));
         _ownsTokenManager = ownsTokenManager;
         _ownedTransport = ownedTransport;
     }
@@ -131,6 +137,17 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _instruments.GetInstrumentsByTypeAsync(type, page, size, baseAssetTicker, cancellationToken);
+    }
+
+    public Task<BcsOrdersSearchResponse> SearchOrdersAsync(
+        BcsOrdersSearchRequest request,
+        int page,
+        int size,
+        IEnumerable<BcsOrderSort>? sort = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _orders.SearchOrdersAsync(request, page, size, sort, cancellationToken);
     }
 
     public void Dispose()

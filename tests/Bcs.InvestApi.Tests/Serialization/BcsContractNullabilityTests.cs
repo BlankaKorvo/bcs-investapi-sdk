@@ -4,6 +4,7 @@ using System.Text.Json;
 using Bcs.InvestApi.Contracts.Instruments;
 using Bcs.InvestApi.Contracts.Limits;
 using Bcs.InvestApi.Contracts.MarketData;
+using Bcs.InvestApi.Contracts.Orders;
 using Bcs.InvestApi.Contracts.Portfolio;
 using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Infrastructure;
@@ -131,6 +132,32 @@ public sealed class BcsContractNullabilityTests
         Assert.Null(bar.High);
         Assert.Null(bar.Low);
         Assert.Null(bar.Volume);
+    }
+
+    [Fact]
+    public void BcsOrdersSearchResponse_MissingScalarFields_DeserializesAsNull()
+    {
+        const string json = """
+        {
+          "records": [
+            {
+              "ticker": "SBER"
+            }
+          ]
+        }
+        """;
+
+        var orders = JsonSerializer.Deserialize<BcsOrdersSearchResponse>(json, BcsJson.SerializerOptions);
+
+        Assert.NotNull(orders);
+        Assert.Null(orders.TotalRecords);
+        Assert.Null(orders.TotalPages);
+
+        var order = Assert.Single(orders.Records);
+        Assert.Equal("SBER", order.Ticker);
+        Assert.Null(order.OrderNum);
+        Assert.Null(order.OrderStatus);
+        Assert.Null(order.TradeDate);
     }
 
     [Fact]
@@ -277,6 +304,16 @@ public sealed class BcsContractNullabilityTests
         Assert.Equal("yellow", instrument.BcsScoreColor);
         Assert.Equal(3030209651200m, instrument.Mktcap);
         Assert.False(instrument.AmortisedMty);
+    }
+
+    [Fact]
+    public void BcsOrdersSearchResponse_PostmanSnippet_Deserializes()
+    {
+        var orders = DeserializePostmanOkResponse<BcsOrdersSearchResponse>("orders/search");
+
+        Assert.Empty(orders.Records);
+        Assert.Equal(0, orders.TotalRecords);
+        Assert.Equal(0, orders.TotalPages);
     }
 
     private static T DeserializePostmanOkResponse<T>(string urlFragment)

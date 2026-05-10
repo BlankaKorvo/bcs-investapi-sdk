@@ -6,6 +6,7 @@ internal static class BcsEndpointPaths
     private const string PortfolioService = "trade-api-bff-portfolio/api/v1";
     private const string InformationService = "trade-api-information-service/api/v1";
     private const string MarketDataService = "trade-api-market-data-connector/api/v1";
+    private const string OrderDetailsService = "trade-api-bff-order-details/api/v1";
 
     internal const string Limits = LimitService + "/limits";
     internal const string Portfolio = PortfolioService + "/portfolio";
@@ -25,5 +26,10 @@ internal static class BcsEndpointPaths
     internal static class MarketData
     {
         internal const string Candles = MarketDataService + "/candles-chart";
+    }
+
+    internal static class Orders
+    {
+        internal const string Search = OrderDetailsService + "/orders/search";
     }
 }

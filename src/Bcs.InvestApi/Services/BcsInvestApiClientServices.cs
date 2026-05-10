@@ -12,7 +12,8 @@ internal sealed class BcsInvestApiClientServices
         BcsPortfolioService portfolio,
         BcsTradingScheduleService tradingSchedule,
         BcsInstrumentsService instruments,
-        BcsMarketDataService marketData)
+        BcsMarketDataService marketData,
+        BcsOrdersService orders)
     {
         Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         Limits = limits ?? throw new ArgumentNullException(nameof(limits));
@@ -20,6 +21,7 @@ internal sealed class BcsInvestApiClientServices
         TradingSchedule = tradingSchedule ?? throw new ArgumentNullException(nameof(tradingSchedule));
         Instruments = instruments ?? throw new ArgumentNullException(nameof(instruments));
         MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
+        Orders = orders ?? throw new ArgumentNullException(nameof(orders));
     }
 
     internal BcsTokenManager Tokens { get; }
@@ -33,6 +35,8 @@ internal sealed class BcsInvestApiClientServices
     internal BcsInstrumentsService Instruments { get; }
 
     internal BcsMarketDataService MarketData { get; }
+
+    internal BcsOrdersService Orders { get; }
 
     internal static BcsInvestApiClientServices Create(
         BcsInvestApiSettings settings,
@@ -53,7 +57,8 @@ internal sealed class BcsInvestApiClientServices
             new BcsPortfolioService(settings, httpClient, tokens, sender),
             new BcsTradingScheduleService(settings, httpClient, tokens, sender),
             new BcsInstrumentsService(settings, httpClient, tokens, sender),
-            new BcsMarketDataService(settings, httpClient, tokens, sender));
+            new BcsMarketDataService(settings, httpClient, tokens, sender),
+            new BcsOrdersService(settings, httpClient, tokens, sender));
     }
 
     internal BcsInvestApiClient CreateClient(
@@ -66,6 +71,7 @@ internal sealed class BcsInvestApiClientServices
             TradingSchedule,
             Instruments,
             MarketData,
+            Orders,
             ownsTokenManager,
             ownedTransport);
 }

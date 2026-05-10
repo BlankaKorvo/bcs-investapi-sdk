@@ -2,6 +2,7 @@ namespace Bcs.InvestApi.Tests;
 
 using System.Net;
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Orders;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
@@ -182,6 +183,31 @@ public sealed class BcsEndpointUrlTests
             new Uri("https://mock.example/root/trade-api-market-data-connector/api/v1/candles-chart?classCode=TQBR&ticker=SBER&startDate=2025-11-14T07%3A00%3A00.0000000Z&endDate=2025-11-14T10%3A00%3A00.0000000Z&timeFrame=H1"),
             handler.LastRequest.RequestUri);
         Assert.Null(handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task SearchOrdersAsync_UsesConfiguredBaseUrlAndQuery()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"records":[],"totalRecords":0,"totalPages":0}""")));
+        var service = new BcsOrdersService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.SearchOrdersAsync(
+            new BcsOrdersSearchRequest(),
+            page: 2,
+            size: 50,
+            sort: new[] { BcsOrderSort.UpdateDateTimeDesc });
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-order-details/api/v1/orders/search?page=2&size=50&sort=updateDateTime%2Cdesc"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal("{}", handler.LastRequestContent);
     }
 
     [Fact]

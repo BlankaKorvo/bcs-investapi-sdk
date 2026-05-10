@@ -39,7 +39,7 @@ net10.0
 - Lazy access-token refresh before token expiration.
 - Internal token manager that authorizes SDK HTTP requests.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, and historical candles.
+- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, and order search.
 
 ## Endpoint Catalog
 
@@ -52,6 +52,7 @@ net10.0
 | `GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
 | `GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
 | `GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
+| `SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
 
 ## Auth Endpoint
 
@@ -106,6 +107,7 @@ state is lost.
 using Bcs.InvestApi;
 using Bcs.InvestApi.DependencyInjection;
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Orders;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -121,6 +123,7 @@ The following calls are independent direct endpoint examples, not an orchestrati
 
 ```csharp
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Orders;
 
 var portfolio = await client.GetPortfolioAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
@@ -142,6 +145,16 @@ var candles = await client.GetCandlesAsync(
     new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
     new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
     BcsCandleTimeFrames.Hour1);
+var orders = await client.SearchOrdersAsync(
+    new BcsOrdersSearchRequest
+    {
+        StartDateTime = DateTimeOffset.UtcNow.AddDays(-7),
+        EndDateTime = DateTimeOffset.UtcNow,
+        OrderStatus = new[] { BcsOrderStatus.Active },
+    },
+    page: 0,
+    size: 50,
+    sort: new[] { BcsOrderSort.OrderDateTimeDesc });
 ```
 
 ## DI Usage
@@ -164,9 +177,9 @@ shown above.
 
 ## Pagination
 
-SDK requests exactly one page. Instrument lookup methods perform one BCS request per call; callers pass `page` and
-`size` explicitly and own any multi-page iteration policy. The server owns validation of supported values and max
-limits.
+SDK requests exactly one page. Instrument lookup and order search methods perform one BCS request per call; callers pass
+`page` and `size` explicitly and own any multi-page iteration policy. The server owns validation of supported values and
+max limits.
 
 ```csharp
 var instruments = await client.GetInstrumentsByIsinsAsync(
@@ -224,7 +237,7 @@ Supported values are `limits`, `portfolio`, `candles`, and `instruments-by-ticke
 `BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs, refresh tokens, or access-token lifecycle
 controls. Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use broker API
 methods such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
-`GetInstrumentsBy...Async(...)`, and `GetCandlesAsync(...)`.
+`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, and `SearchOrdersAsync(...)`.
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make refresh-token
 exposure explicit in that API.
