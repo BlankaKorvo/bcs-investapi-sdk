@@ -1,5 +1,6 @@
 using Bcs.InvestApi;
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Orders;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN");
 if (string.IsNullOrWhiteSpace(refreshToken))
@@ -81,13 +82,34 @@ foreach (var bar in candles.Bars.Take(10))
         $"  {bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
 }
 
-var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
-Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
+//var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
+//Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
 
-foreach (var interval in schedule.DailySchedule)
+//foreach (var interval in schedule.DailySchedule)
+//{
+//    Console.WriteLine(
+//        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
+//}
+
+var ordersEnd = DateTimeOffset.UtcNow;
+var ordersStart = ordersEnd.AddDays(-500);
+var orders = await client.SearchOrdersAsync(
+    new BcsOrdersSearchRequest
+    {
+        StartDateTime = ordersStart,
+        EndDateTime = ordersEnd,
+        //Tickers = new[] { ticker },
+        //ClassCodes = new[] { classCode },
+    },
+    page: 0,
+    size: 10,
+    sort: new[] { BcsOrderSort.OrderDateTimeDesc });
+Console.WriteLine($"Orders for {classCode}/{ticker}: page records = {orders.Records.Count}, total = {orders.TotalRecords}, pages = {orders.TotalPages}");
+
+foreach (var order in orders.Records.Take(10))
 {
     Console.WriteLine(
-        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
+        $"  {order.OrderDateTime:O}: #{order.OrderNum} {order.Side} {order.OrderType} {order.OrderStatus} {order.Ticker}/{order.ClassCode} qty={order.OrderQuantity} price={order.Price}");
 }
 
 return 0;
