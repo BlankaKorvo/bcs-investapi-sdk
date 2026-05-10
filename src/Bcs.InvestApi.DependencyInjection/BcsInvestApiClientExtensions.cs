@@ -1,5 +1,6 @@
-namespace Bcs.InvestApi;
+namespace Bcs.InvestApi.DependencyInjection;
 
+using Bcs.InvestApi;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;

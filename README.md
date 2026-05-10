@@ -104,6 +104,7 @@ state is lost.
 
 ```csharp
 using Bcs.InvestApi;
+using Bcs.InvestApi.DependencyInjection;
 using Bcs.InvestApi.DTO.Enums;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
@@ -233,7 +234,7 @@ exposure explicit in that API.
 BCS non-success auth responses are exposed as `BcsAuthException`:
 
 ```csharp
-using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.DTO.Exceptions;
 
 try
 {

@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.Tokens;
 
 using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.DTO.Enums;
-using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.DTO.Exceptions;
 using Bcs.InvestApi.Services;
 
 internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IAsyncDisposable

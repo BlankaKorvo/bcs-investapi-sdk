@@ -2,9 +2,10 @@ namespace Bcs.InvestApi.Tests.Tokens;
 
 using System.Net;
 using System.Reflection;
+using Bcs.InvestApi.DependencyInjection;
 using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.DTO.Enums;
-using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.DTO.Exceptions;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
 using Bcs.InvestApi.Tokens;

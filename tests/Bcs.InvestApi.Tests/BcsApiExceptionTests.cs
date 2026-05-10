@@ -3,7 +3,7 @@ namespace Bcs.InvestApi.Tests;
 using System.Net;
 using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.DTO.Enums;
-using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.DTO.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;

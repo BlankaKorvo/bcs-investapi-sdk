@@ -5,7 +5,7 @@ using System.Text.Json;
 using Bcs.InvestApi;
 using Bcs.InvestApi.DTO;
 using Bcs.InvestApi.DTO.Enums;
-using Bcs.InvestApi.Exceptions;
+using Bcs.InvestApi.DTO.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 
 internal sealed class BcsAuthService
