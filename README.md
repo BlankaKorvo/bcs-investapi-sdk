@@ -39,7 +39,8 @@ net10.0
 - Lazy access-token refresh before token expiration.
 - Internal token manager that authorizes SDK HTTP requests.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, and order search.
+- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, order search, and
+  order cancellation.
 
 ## Endpoint Catalog
 
@@ -53,6 +54,7 @@ net10.0
 | `GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
 | `GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
 | `SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
+| `CancelOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}/cancel` |
 
 ## Auth Endpoint
 
@@ -155,6 +157,10 @@ var orders = await client.SearchOrdersAsync(
     page: 0,
     size: 50,
     sort: new[] { BcsOrderSort.OrderDateTimeDesc });
+
+var cancelResult = await client.CancelOrderAsync(
+    originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+    clientOrderId: Guid.NewGuid());
 ```
 
 ## DI Usage
@@ -232,12 +238,15 @@ dotnet run --project sample/Bcs.InvestApi.Sample -- candles
 Supported values are `limits`, `portfolio`, `candles`, and `instruments-by-ticker`. The sample requires
 `BCS_REFRESH_TOKEN` and does not include real tokens.
 
+Order cancellation in the sample is disabled by default. Set `BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID` to opt in;
+the sample will use `trade-api-write` unless `BCS_SAMPLE_CLIENT_ID` is explicitly set.
+
 ## Raw Auth Boundary
 
 `BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs, refresh tokens, or access-token lifecycle
 controls. Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use broker API
 methods such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
-`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, and `SearchOrdersAsync(...)`.
+`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `SearchOrdersAsync(...)`, and `CancelOrderAsync(...)`.
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make refresh-token
 exposure explicit in that API.

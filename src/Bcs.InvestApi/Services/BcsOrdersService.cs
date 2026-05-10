@@ -13,6 +13,7 @@ using Bcs.InvestApi.Tokens;
 internal sealed class BcsOrdersService
 {
     private readonly BcsApiRequestExecutor _executor;
+    private readonly Uri _orderOperationsRootUrl;
     private readonly Uri _ordersSearchUrl;
 
     internal BcsOrdersService(
@@ -42,6 +43,7 @@ internal sealed class BcsOrdersService
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _ordersSearchUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.Search);
+        _orderOperationsRootUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.OperationsRoot);
     }
 
     internal Task<BcsOrdersSearchResponse> SearchOrdersAsync(
@@ -61,6 +63,20 @@ internal sealed class BcsOrdersService
         return _executor.SendJsonAsync<BcsOrdersSearchResponse>(
             accessToken => CreateRequestMessage(accessToken, requestBody, page, size, sortValues),
             "orders-search",
+            cancellationToken);
+    }
+
+    internal Task<BcsCancelOrderResponse> CancelOrderAsync(
+        Guid originalClientOrderId,
+        Guid clientOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequiredGuid(originalClientOrderId, nameof(originalClientOrderId));
+        ValidateRequiredGuid(clientOrderId, nameof(clientOrderId));
+
+        return _executor.SendJsonAsync<BcsCancelOrderResponse>(
+            accessToken => CreateCancelOrderRequestMessage(accessToken, originalClientOrderId, clientOrderId),
+            "order-cancel",
             cancellationToken);
     }
 
@@ -128,6 +144,31 @@ internal sealed class BcsOrdersService
         return builder.Uri;
     }
 
+    private HttpRequestMessage CreateCancelOrderRequestMessage(
+        string accessToken,
+        Guid originalClientOrderId,
+        Guid clientOrderId)
+    {
+        var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post,
+                CreateCancelOrderUrl(originalClientOrderId))
+            .WithBearer(accessToken)
+            .AcceptJson();
+
+        requestMessage.Content = new StringContent(
+            JsonSerializer.Serialize(new BcsCancelOrderRequestBody(clientOrderId), BcsJson.SerializerOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        return requestMessage;
+    }
+
+    private Uri CreateCancelOrderUrl(Guid originalClientOrderId)
+    {
+        var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
+        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), $"{originalClientOrderIdValue}/cancel");
+    }
+
     private static IReadOnlyList<int>? ToApiValues(IReadOnlyList<BcsOrderStatus>? values) =>
         values?.Select(value => value.ToApiValue()).ToArray();
 
@@ -173,8 +214,26 @@ internal sealed class BcsOrdersService
         }
     }
 
+    private static void ValidateRequiredGuid(Guid value, string parameterName)
+    {
+        if (value == Guid.Empty)
+        {
+            throw new ArgumentException("BCS order UUID must not be empty.", parameterName);
+        }
+    }
+
     private static string FormatBodyDateTime(DateTimeOffset value) =>
         value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+
+    private static Uri EnsureTrailingSlash(Uri uri)
+    {
+        if (uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal))
+        {
+            return uri;
+        }
+
+        return new Uri(uri.AbsoluteUri + "/");
+    }
 
     private sealed record BcsOrdersSearchRequestBody
     {
@@ -199,4 +258,6 @@ internal sealed class BcsOrdersService
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<string>? ClassCodes { get; init; }
     }
+
+    private sealed record BcsCancelOrderRequestBody(Guid ClientOrderId);
 }

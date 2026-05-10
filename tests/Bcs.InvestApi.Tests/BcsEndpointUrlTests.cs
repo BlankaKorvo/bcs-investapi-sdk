@@ -211,6 +211,29 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
+    public async Task CancelOrderAsync_UsesConfiguredBaseUrlAndPathParameter()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-1234-1234-1234-123456789123","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.CancelOrderAsync(
+            Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            Guid.Parse("12345678-1234-1234-1234-123456789123"));
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/cancel"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal("""{"clientOrderId":"12345678-1234-1234-1234-123456789123"}""", handler.LastRequestContent);
+    }
+
+    [Fact]
     public void ValidateBaseUrl_WithHttpBaseUrl_ThrowsByDefault()
     {
         var settings = CreateSettings(new Uri("http://localhost:8080"));

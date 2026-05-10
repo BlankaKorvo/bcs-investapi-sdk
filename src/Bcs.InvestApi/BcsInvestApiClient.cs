@@ -150,6 +150,15 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         return _orders.SearchOrdersAsync(request, page, size, sort, cancellationToken);
     }
 
+    public Task<BcsCancelOrderResponse> CancelOrderAsync(
+        Guid originalClientOrderId,
+        Guid clientOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _orders.CancelOrderAsync(originalClientOrderId, clientOrderId, cancellationToken);
+    }
+
     public void Dispose()
     {
         if (_disposed)

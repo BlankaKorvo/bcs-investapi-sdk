@@ -9,9 +9,12 @@ if (string.IsNullOrWhiteSpace(refreshToken))
     return 1;
 }
 
+var cancelOriginalClientOrderIdValue = Environment.GetEnvironmentVariable("BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID");
+var clientId = GetConfiguredClientId(cancelOriginalClientOrderIdValue);
+
 await using var client = BcsInvestApiClientFactory.Create(
     refreshToken: refreshToken,
-    clientId: BcsAuthClientIds.TradeApiRead);
+    clientId: clientId);
 
 var limits = await client.GetLimitsAsync();
 Console.WriteLine($"Depo limits: {limits.DepoLimit.Count}");
@@ -112,7 +115,60 @@ foreach (var order in orders.Records.Take(10))
         $"  {order.OrderDateTime:O}: #{order.OrderNum} {order.Side} {order.OrderType} {order.OrderStatus} {order.Ticker}/{order.ClassCode} qty={order.OrderQuantity} price={order.Price}");
 }
 
+if (!string.IsNullOrWhiteSpace(cancelOriginalClientOrderIdValue))
+{
+    if (!Guid.TryParse(cancelOriginalClientOrderIdValue, out var cancelOriginalClientOrderId))
+    {
+        Console.Error.WriteLine("BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID must be a valid UUID.");
+        return 1;
+    }
+
+    var cancelClientOrderId = GetConfiguredCancelClientOrderId();
+    var cancelResponse = await client.CancelOrderAsync(cancelOriginalClientOrderId, cancelClientOrderId);
+    Console.WriteLine($"Cancel order result: clientOrderId = {cancelResponse.ClientOrderId}, status = {cancelResponse.Status}");
+}
+else
+{
+    Console.WriteLine("Order cancel skipped. Set BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID to enable it.");
+}
+
 return 0;
+
+static BcsAuthClientIds GetConfiguredClientId(string? cancelOriginalClientOrderIdValue)
+{
+    var rawClientId = Environment.GetEnvironmentVariable("BCS_SAMPLE_CLIENT_ID");
+    if (string.IsNullOrWhiteSpace(rawClientId))
+    {
+        return string.IsNullOrWhiteSpace(cancelOriginalClientOrderIdValue)
+            ? BcsAuthClientIds.TradeApiRead
+            : BcsAuthClientIds.TradeApiWrite;
+    }
+
+    return rawClientId.Trim().ToLowerInvariant() switch
+    {
+        "read" => BcsAuthClientIds.TradeApiRead,
+        "write" => BcsAuthClientIds.TradeApiWrite,
+        "trade-api-read" => BcsAuthClientIds.TradeApiRead,
+        "trade-api-write" => BcsAuthClientIds.TradeApiWrite,
+        _ => throw new InvalidOperationException("BCS_SAMPLE_CLIENT_ID must be read, write, trade-api-read, or trade-api-write."),
+    };
+}
+
+static Guid GetConfiguredCancelClientOrderId()
+{
+    var rawClientOrderId = Environment.GetEnvironmentVariable("BCS_SAMPLE_CANCEL_CLIENT_ORDER_ID");
+    if (string.IsNullOrWhiteSpace(rawClientOrderId))
+    {
+        return Guid.NewGuid();
+    }
+
+    if (!Guid.TryParse(rawClientOrderId, out var clientOrderId))
+    {
+        throw new InvalidOperationException("BCS_SAMPLE_CANCEL_CLIENT_ORDER_ID must be a valid UUID.");
+    }
+
+    return clientOrderId;
+}
 
 static string[] GetConfiguredIsins()
 {

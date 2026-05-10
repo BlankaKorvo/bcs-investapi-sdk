@@ -161,6 +161,18 @@ public sealed class BcsContractNullabilityTests
     }
 
     [Fact]
+    public void BcsCancelOrderResponse_MissingScalarFields_DeserializesAsNull()
+    {
+        const string json = "{}";
+
+        var response = JsonSerializer.Deserialize<BcsCancelOrderResponse>(json, BcsJson.SerializerOptions);
+
+        Assert.NotNull(response);
+        Assert.Null(response.ClientOrderId);
+        Assert.Null(response.Status);
+    }
+
+    [Fact]
     public void BcsDailyTradingScheduleResponse_MissingScalarFields_DeserializesAsNull()
     {
         const string json = """

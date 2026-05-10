@@ -155,6 +155,58 @@ public sealed class BcsOrdersServiceTests
     }
 
     [Fact]
+    public async Task CancelOrderAsync_PostsJsonBodyAndDeserializesResponse()
+    {
+        const string cancelJson = """
+        {
+          "clientOrderId": "12345678-1234-1234-1234-123456789123",
+          "status": "OK"
+        }
+        """;
+
+        var originalClientOrderId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var clientOrderId = Guid.Parse("12345678-1234-1234-1234-123456789123");
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, cancelJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.CancelOrderAsync(originalClientOrderId, clientOrderId);
+
+        Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/cancel"),
+            handler.LastRequest?.RequestUri);
+        Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
+        Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
+        Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
+        Assert.Equal("""{"clientOrderId":"12345678-1234-1234-1234-123456789123"}""", handler.LastRequestContent);
+        Assert.Equal(clientOrderId, response.ClientOrderId);
+        Assert.Equal("OK", response.Status);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_WithEmptyOriginalClientOrderId_Throws()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CancelOrderAsync(Guid.Empty, Guid.Parse("12345678-1234-1234-1234-123456789123")));
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_WithEmptyClientOrderId_Throws()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CancelOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), Guid.Empty));
+    }
+
+    [Fact]
     public async Task SearchOrdersAsync_WithNegativePage_Throws()
     {
         var service = CreateService();
