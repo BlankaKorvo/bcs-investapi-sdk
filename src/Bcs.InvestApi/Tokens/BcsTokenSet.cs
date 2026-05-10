@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Tokens;
 
-using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.Contracts.Auth;
 
 internal sealed record BcsTokenSet
 {

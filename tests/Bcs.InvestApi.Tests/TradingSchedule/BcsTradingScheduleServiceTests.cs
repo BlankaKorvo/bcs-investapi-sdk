@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.Tests.TradingSchedule;
 
 using System.Net;
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO.Exceptions;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;

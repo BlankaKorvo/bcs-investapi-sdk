@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.DTO.Exceptions;
+namespace Bcs.InvestApi.Contracts.Exceptions;
 
 using System.Net;
 

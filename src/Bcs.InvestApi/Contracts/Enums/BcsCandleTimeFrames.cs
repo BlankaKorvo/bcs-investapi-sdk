@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.DTO.Enums;
+namespace Bcs.InvestApi.Contracts.Enums;
 
 public enum BcsCandleTimeFrames
 {

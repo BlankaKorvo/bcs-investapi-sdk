@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi.Tests;
 
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 using Xunit;
 
 public sealed class BcsInvestApiSettingsTests

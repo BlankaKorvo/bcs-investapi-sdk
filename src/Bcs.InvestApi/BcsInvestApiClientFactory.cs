@@ -1,6 +1,6 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Services;
 
 public static class BcsInvestApiClientFactory

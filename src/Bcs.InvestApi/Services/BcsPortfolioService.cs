@@ -1,7 +1,7 @@
 namespace Bcs.InvestApi.Services;
 
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.Contracts.Portfolio;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 

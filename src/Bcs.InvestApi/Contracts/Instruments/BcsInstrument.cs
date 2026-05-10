@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.DTO;
+namespace Bcs.InvestApi.Contracts.Instruments;
 
 using System.Text.Json.Serialization;
 

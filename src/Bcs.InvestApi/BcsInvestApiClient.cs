@@ -1,7 +1,11 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.DTO;
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Instruments;
+using Bcs.InvestApi.Contracts.Limits;
+using Bcs.InvestApi.Contracts.MarketData;
+using Bcs.InvestApi.Contracts.Portfolio;
+using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
 

@@ -1,6 +1,6 @@
-namespace Bcs.InvestApi.DTO;
+namespace Bcs.InvestApi.Contracts.Auth;
 
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 
 internal sealed record BcsAuthRequest
 {

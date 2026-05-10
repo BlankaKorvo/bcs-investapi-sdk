@@ -2,8 +2,8 @@ namespace Bcs.InvestApi.Services;
 
 using System.Globalization;
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO;
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.MarketData;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 

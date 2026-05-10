@@ -2,7 +2,7 @@
 
 Thin C# SDK for BCS Trade API.
 
-Bcs.InvestApi is a raw endpoint client: transport, DTOs, and auth helper only.
+Bcs.InvestApi is a raw endpoint client: transport, contract types, and auth helper only.
 
 The SDK does not aggregate, normalize, map, paginate, trade, schedule, or interpret data. It is not an application
 layer, token daemon, trading system, portfolio model, or strategy framework.
@@ -17,14 +17,14 @@ net10.0
 
 ## Package Shape
 
-- `Bcs.InvestApi` contains SDK core: auth helper, in-memory token cache, HTTP transport, raw DTOs, and endpoint methods.
+- `Bcs.InvestApi` contains SDK core: auth helper, in-memory token cache, HTTP transport, raw contract DTOs, and endpoint methods.
 - `Bcs.InvestApi.DependencyInjection` contains optional Microsoft.Extensions.DependencyInjection registration.
 - SDK core does not depend on `Microsoft.Extensions.*`.
 
 ## SDK Boundary
 
 - Endpoint methods perform one BCS server request per call.
-- Raw endpoint DTOs stay raw. Callers own business logic, domain mapping, aggregation, normalization, pagination loops,
+- Raw endpoint contract DTOs stay raw. Callers own business logic, domain mapping, aggregation, normalization, pagination loops,
   trading decisions, scheduling, retry policy, persistence, and operational recovery.
 - Raw endpoints stay in SDK, including portfolio, because they are direct BCS server endpoints rather than SDK-level
   portfolio modeling.
@@ -105,7 +105,7 @@ state is lost.
 ```csharp
 using Bcs.InvestApi;
 using Bcs.InvestApi.DependencyInjection;
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -120,7 +120,7 @@ var limits = await client.GetLimitsAsync();
 The following calls are independent direct endpoint examples, not an orchestration flow:
 
 ```csharp
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 
 var portfolio = await client.GetPortfolioAsync();
 var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
@@ -150,7 +150,7 @@ Install/reference `Bcs.InvestApi.DependencyInjection` only when the host already
 
 ```csharp
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 
 services.AddBcsInvestApiClient(settings =>
 {
@@ -191,7 +191,7 @@ var sberOptions = await client.GetInstrumentsByTypeAsync(
 `GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
 
 ```csharp
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
 
 var candles = await client.GetCandlesAsync(
     classCode: "TQBR",
@@ -234,7 +234,7 @@ exposure explicit in that API.
 BCS non-success auth responses are exposed as `BcsAuthException`:
 
 ```csharp
-using Bcs.InvestApi.DTO.Exceptions;
+using Bcs.InvestApi.Contracts.Exceptions;
 
 try
 {

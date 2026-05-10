@@ -1,11 +1,15 @@
 namespace Bcs.InvestApi.Tests.Serialization;
 
 using System.Text.Json;
-using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.Contracts.Instruments;
+using Bcs.InvestApi.Contracts.Limits;
+using Bcs.InvestApi.Contracts.MarketData;
+using Bcs.InvestApi.Contracts.Portfolio;
+using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Infrastructure;
 using Xunit;
 
-public sealed class BcsDtoNullabilityTests
+public sealed class BcsContractNullabilityTests
 {
     [Fact]
     public void BcsInstrument_MissingScalarFields_DeserializesAsNull()

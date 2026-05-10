@@ -1,4 +1,4 @@
-namespace Bcs.InvestApi.DTO;
+namespace Bcs.InvestApi.Contracts.MarketData;
 
 public sealed record BcsCandlesResponse
 {

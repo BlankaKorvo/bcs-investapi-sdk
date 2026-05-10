@@ -3,9 +3,9 @@ namespace Bcs.InvestApi.Services;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO;
-using Bcs.InvestApi.DTO.Enums;
-using Bcs.InvestApi.DTO.Exceptions;
+using Bcs.InvestApi.Contracts.Auth;
+using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 
 internal sealed class BcsAuthService

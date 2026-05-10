@@ -1,7 +1,7 @@
 namespace Bcs.InvestApi.Tests;
 
 using System.Reflection;
-using Bcs.InvestApi.DTO;
+using Bcs.InvestApi.Contracts.Auth;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
 using Xunit;

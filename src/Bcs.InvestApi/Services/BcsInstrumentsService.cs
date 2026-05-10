@@ -4,8 +4,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Bcs.InvestApi;
-using Bcs.InvestApi.DTO;
-using Bcs.InvestApi.DTO.Enums;
+using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Instruments;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
