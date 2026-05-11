@@ -150,6 +150,22 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         return _orders.SearchOrdersAsync(request, page, size, sort, cancellationToken);
     }
 
+    public Task<BcsCreateOrderResponse> CreateOrderAsync(
+        BcsCreateOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _orders.CreateOrderAsync(request, cancellationToken);
+    }
+
+    public Task<BcsOrderStatusResponse> GetOrderStatusAsync(
+        Guid clientOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _orders.GetOrderStatusAsync(clientOrderId, cancellationToken);
+    }
+
     public Task<BcsCancelOrderResponse> CancelOrderAsync(
         Guid originalClientOrderId,
         Guid clientOrderId,
@@ -157,6 +173,15 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _orders.CancelOrderAsync(originalClientOrderId, clientOrderId, cancellationToken);
+    }
+
+    public Task<BcsUpdateOrderResponse> UpdateOrderAsync(
+        Guid originalClientOrderId,
+        BcsUpdateOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _orders.UpdateOrderAsync(originalClientOrderId, request, cancellationToken);
     }
 
     public void Dispose()

@@ -13,6 +13,7 @@ using Bcs.InvestApi.Tokens;
 internal sealed class BcsOrdersService
 {
     private readonly BcsApiRequestExecutor _executor;
+    private readonly Uri _ordersCreateUrl;
     private readonly Uri _orderOperationsRootUrl;
     private readonly Uri _ordersSearchUrl;
 
@@ -42,8 +43,47 @@ internal sealed class BcsOrdersService
         settings.ValidateBaseUrl();
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        _ordersCreateUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.Create);
         _ordersSearchUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.Search);
         _orderOperationsRootUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.OperationsRoot);
+    }
+
+    internal Task<BcsCreateOrderResponse> CreateOrderAsync(
+        BcsCreateOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateRequiredGuid(request.ClientOrderId, nameof(request.ClientOrderId));
+        var side = request.Side.ToApiValue().ToString(CultureInfo.InvariantCulture);
+        var orderType = request.OrderType.ToApiValue().ToString(CultureInfo.InvariantCulture);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Ticker);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ClassCode);
+
+        var requestBody = new BcsCreateOrderRequestBody(
+            request.ClientOrderId,
+            side,
+            orderType,
+            request.OrderQuantity,
+            request.Ticker,
+            request.ClassCode,
+            request.Price);
+
+        return _executor.SendJsonAsync<BcsCreateOrderResponse>(
+            accessToken => CreateCreateOrderRequestMessage(accessToken, requestBody),
+            "order-create",
+            cancellationToken);
+    }
+
+    internal Task<BcsOrderStatusResponse> GetOrderStatusAsync(
+        Guid clientOrderId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequiredGuid(clientOrderId, nameof(clientOrderId));
+
+        return _executor.SendJsonAsync<BcsOrderStatusResponse>(
+            accessToken => CreateGetOrderStatusRequestMessage(accessToken, clientOrderId),
+            "order-status",
+            cancellationToken);
     }
 
     internal Task<BcsOrdersSearchResponse> SearchOrdersAsync(
@@ -80,6 +120,26 @@ internal sealed class BcsOrdersService
             cancellationToken);
     }
 
+    internal Task<BcsUpdateOrderResponse> UpdateOrderAsync(
+        Guid originalClientOrderId,
+        BcsUpdateOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequiredGuid(originalClientOrderId, nameof(originalClientOrderId));
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateRequiredGuid(request.ClientOrderId, nameof(request.ClientOrderId));
+
+        var requestBody = new BcsUpdateOrderRequestBody(
+            request.ClientOrderId,
+            request.Price,
+            request.OrderQuantity);
+
+        return _executor.SendJsonAsync<BcsUpdateOrderResponse>(
+            accessToken => CreateUpdateOrderRequestMessage(accessToken, originalClientOrderId, requestBody),
+            "order-update",
+            cancellationToken);
+    }
+
     private static BcsOrdersSearchRequestBody CreateRequestBody(BcsOrdersSearchRequest request)
     {
         return new BcsOrdersSearchRequestBody
@@ -96,6 +156,31 @@ internal sealed class BcsOrdersService
             Tickers = ValidateStringValues(request.Tickers, nameof(request.Tickers)),
             ClassCodes = ValidateStringValues(request.ClassCodes, nameof(request.ClassCodes)),
         };
+    }
+
+    private HttpRequestMessage CreateCreateOrderRequestMessage(
+        string accessToken,
+        BcsCreateOrderRequestBody requestBody)
+    {
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, _ordersCreateUrl)
+            .WithBearer(accessToken)
+            .AcceptJson();
+
+        requestMessage.Content = new StringContent(
+            JsonSerializer.Serialize(requestBody, BcsJson.SerializerOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        return requestMessage;
+    }
+
+    private HttpRequestMessage CreateGetOrderStatusRequestMessage(
+        string accessToken,
+        Guid clientOrderId)
+    {
+        return new HttpRequestMessage(HttpMethod.Get, CreateGetOrderStatusUrl(clientOrderId))
+            .WithBearer(accessToken)
+            .AcceptJson();
     }
 
     private HttpRequestMessage CreateRequestMessage(
@@ -167,6 +252,37 @@ internal sealed class BcsOrdersService
     {
         var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
         return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), $"{originalClientOrderIdValue}/cancel");
+    }
+
+    private HttpRequestMessage CreateUpdateOrderRequestMessage(
+        string accessToken,
+        Guid originalClientOrderId,
+        BcsUpdateOrderRequestBody requestBody)
+    {
+        var requestMessage = new HttpRequestMessage(
+                HttpMethod.Post,
+                CreateUpdateOrderUrl(originalClientOrderId))
+            .WithBearer(accessToken)
+            .AcceptJson();
+
+        requestMessage.Content = new StringContent(
+            JsonSerializer.Serialize(requestBody, BcsJson.SerializerOptions),
+            Encoding.UTF8,
+            "application/json");
+
+        return requestMessage;
+    }
+
+    private Uri CreateUpdateOrderUrl(Guid originalClientOrderId)
+    {
+        var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
+        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), originalClientOrderIdValue);
+    }
+
+    private Uri CreateGetOrderStatusUrl(Guid clientOrderId)
+    {
+        var clientOrderIdValue = Uri.EscapeDataString(clientOrderId.ToString("D"));
+        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), clientOrderIdValue);
     }
 
     private static IReadOnlyList<int>? ToApiValues(IReadOnlyList<BcsOrderStatus>? values) =>
@@ -259,5 +375,19 @@ internal sealed class BcsOrdersService
         public IReadOnlyList<string>? ClassCodes { get; init; }
     }
 
+    private sealed record BcsCreateOrderRequestBody(
+        Guid ClientOrderId,
+        string Side,
+        string OrderType,
+        long OrderQuantity,
+        string Ticker,
+        string ClassCode,
+        decimal Price);
+
     private sealed record BcsCancelOrderRequestBody(Guid ClientOrderId);
+
+    private sealed record BcsUpdateOrderRequestBody(
+        Guid ClientOrderId,
+        decimal Price,
+        long OrderQuantity);
 }

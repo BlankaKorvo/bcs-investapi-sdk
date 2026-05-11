@@ -31,6 +31,7 @@ internal static class BcsEndpointPaths
 
     internal static class Orders
     {
+        internal const string Create = OrderOperationsService + "/orders";
         internal const string Search = OrderDetailsService + "/orders/search";
         internal const string OperationsRoot = OrderOperationsService + "/orders";
     }

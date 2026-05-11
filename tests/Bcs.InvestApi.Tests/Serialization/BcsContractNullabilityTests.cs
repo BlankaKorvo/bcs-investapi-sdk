@@ -173,6 +173,54 @@ public sealed class BcsContractNullabilityTests
     }
 
     [Fact]
+    public void BcsCreateOrderResponse_MissingScalarFields_DeserializesAsNull()
+    {
+        const string json = "{}";
+
+        var response = JsonSerializer.Deserialize<BcsCreateOrderResponse>(json, BcsJson.SerializerOptions);
+
+        Assert.NotNull(response);
+        Assert.Null(response.ClientOrderId);
+        Assert.Null(response.Status);
+    }
+
+    [Fact]
+    public void BcsUpdateOrderResponse_MissingScalarFields_DeserializesAsNull()
+    {
+        const string json = "{}";
+
+        var response = JsonSerializer.Deserialize<BcsUpdateOrderResponse>(json, BcsJson.SerializerOptions);
+
+        Assert.NotNull(response);
+        Assert.Null(response.ClientOrderId);
+        Assert.Null(response.Status);
+    }
+
+    [Fact]
+    public void BcsOrderStatusResponse_MissingScalarFields_DeserializesAsNull()
+    {
+        const string json = """
+        {
+          "data": {
+          }
+        }
+        """;
+
+        var response = JsonSerializer.Deserialize<BcsOrderStatusResponse>(json, BcsJson.SerializerOptions);
+
+        Assert.NotNull(response);
+        Assert.Null(response.ClientOrderId);
+        Assert.Null(response.OriginalClientOrderId);
+
+        Assert.NotNull(response.Data);
+        var data = response.Data;
+        Assert.Null(data.MessageType);
+        Assert.Null(data.OrderStatus);
+        Assert.Null(data.TransactionTime);
+        Assert.Null(data.OrderQuantity);
+    }
+
+    [Fact]
     public void BcsDailyTradingScheduleResponse_MissingScalarFields_DeserializesAsNull()
     {
         const string json = """

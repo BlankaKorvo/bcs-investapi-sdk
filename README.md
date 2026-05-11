@@ -39,8 +39,8 @@ net10.0
 - Lazy access-token refresh before token expiration.
 - Internal token manager that authorizes SDK HTTP requests.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, order search, and
-  order cancellation.
+- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, order creation,
+  order status, order search, order update, and order cancellation.
 
 ## Endpoint Catalog
 
@@ -53,7 +53,10 @@ net10.0
 | `GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
 | `GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
 | `GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
+| `CreateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders` |
+| `GetOrderStatusAsync` | `GET /trade-api-bff-operations/api/v1/orders/{clientOrderId}` |
 | `SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
+| `UpdateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
 | `CancelOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}/cancel` |
 
 ## Auth Endpoint
@@ -157,6 +160,16 @@ var orders = await client.SearchOrdersAsync(
     page: 0,
     size: 50,
     sort: new[] { BcsOrderSort.OrderDateTimeDesc });
+var orderStatus = await client.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+
+var updateResult = await client.UpdateOrderAsync(
+    originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+    request: new BcsUpdateOrderRequest
+    {
+        ClientOrderId = Guid.NewGuid(),
+        OrderQuantity = 10,
+        Price = 9.540m,
+    });
 
 var cancelResult = await client.CancelOrderAsync(
     originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
@@ -246,7 +259,8 @@ the sample will use `trade-api-write` unless `BCS_SAMPLE_CLIENT_ID` is explicitl
 `BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs, refresh tokens, or access-token lifecycle
 controls. Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use broker API
 methods such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
-`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `SearchOrdersAsync(...)`, and `CancelOrderAsync(...)`.
+`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`, `GetOrderStatusAsync(...)`,
+`SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, and `CancelOrderAsync(...)`.
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make refresh-token
 exposure explicit in that API.

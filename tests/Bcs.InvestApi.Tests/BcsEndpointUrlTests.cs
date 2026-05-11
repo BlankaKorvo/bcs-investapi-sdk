@@ -211,6 +211,60 @@ public sealed class BcsEndpointUrlTests
     }
 
     [Fact]
+    public async Task CreateOrderAsync_UsesConfiguredBaseUrl()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-1234-1234-1234-123456789123","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.CreateOrderAsync(
+            new BcsCreateOrderRequest
+            {
+                ClientOrderId = Guid.Parse("12345678-1234-1234-1234-123456789123"),
+                Side = BcsOrderSide.Buy,
+                OrderType = BcsOrderType.Limit,
+                OrderQuantity = 10,
+                Ticker = "APTK",
+                ClassCode = "TQBR",
+                Price = 9.530m,
+            });
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-operations/api/v1/orders"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal(
+            """{"clientOrderId":"12345678-1234-1234-1234-123456789123","side":"1","orderType":"2","orderQuantity":10,"ticker":"APTK","classCode":"TQBR","price":9.530}""",
+            handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_UsesConfiguredBaseUrlAndPathParameter()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-1234-1234-9adb-123456789876"}""")));
+        var service = new BcsOrdersService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-operations/api/v1/orders/12345678-1234-1234-9adb-123456789876"),
+            handler.LastRequest.RequestUri);
+        Assert.Null(handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task CancelOrderAsync_UsesConfiguredBaseUrlAndPathParameter()
     {
         var settings = CreateSettings(new Uri("https://mock.example/root/"));
@@ -231,6 +285,36 @@ public sealed class BcsEndpointUrlTests
             new Uri("https://mock.example/root/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/cancel"),
             handler.LastRequest.RequestUri);
         Assert.Equal("""{"clientOrderId":"12345678-1234-1234-1234-123456789123"}""", handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task UpdateOrderAsync_UsesConfiguredBaseUrlAndPathParameter()
+    {
+        var settings = CreateSettings(new Uri("https://mock.example/root/"));
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            settings,
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.UpdateOrderAsync(
+            Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            new BcsUpdateOrderRequest
+            {
+                ClientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432"),
+                OrderQuantity = 10,
+                Price = 9.540m,
+            });
+
+        Assert.NotNull(handler.LastRequest);
+        Assert.Equal(
+            new Uri("https://mock.example/root/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            handler.LastRequest.RequestUri);
+        Assert.Equal(
+            """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","price":9.540,"orderQuantity":10}""",
+            handler.LastRequestContent);
     }
 
     [Fact]
