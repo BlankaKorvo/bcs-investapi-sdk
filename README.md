@@ -251,8 +251,23 @@ dotnet run --project sample/Bcs.InvestApi.Sample -- candles
 Supported values are `limits`, `portfolio`, `candles`, and `instruments-by-ticker`. The sample requires
 `BCS_REFRESH_TOKEN` and does not include real tokens.
 
-Order cancellation in the sample is disabled by default. Set `BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID` to opt in;
-the sample will use `trade-api-write` unless `BCS_SAMPLE_CLIENT_ID` is explicitly set.
+Order search runs in the sample smoke flow. Other order calls are guarded by explicit environment variables:
+
+| Operation | Required | Optional |
+|---|---|---|
+| Status | `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` | — |
+| Create | `BCS_SAMPLE_CREATE_ORDER=true`, `BCS_SAMPLE_CREATE_ORDER_QUANTITY`, `BCS_SAMPLE_CREATE_PRICE` | `BCS_SAMPLE_CREATE_CLIENT_ORDER_ID`, `BCS_SAMPLE_CREATE_SIDE` (default `Buy`), `BCS_SAMPLE_CREATE_ORDER_TYPE` (default `Limit`) |
+| Update | `BCS_SAMPLE_UPDATE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_UPDATE_ORDER_QUANTITY`, `BCS_SAMPLE_UPDATE_PRICE` | `BCS_SAMPLE_UPDATE_CLIENT_ORDER_ID` |
+| Cancel | `BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CANCEL_CLIENT_ORDER_ID` |
+
+Create/update/cancel use `trade-api-write` unless `BCS_SAMPLE_CLIENT_ID` is explicitly set. All env-var configuration is
+validated up front; bad values fail fast with a non-zero exit code before any network call.
+
+Accepted boolean values for `BCS_SAMPLE_CREATE_ORDER` (case-insensitive): `1`, `true`, `yes`, `on` (enable); `0`,
+`false`, `no`, `off` (disable). Any other value is rejected.
+
+`BCS_SAMPLE_CREATE_PRICE` is currently required for every `BCS_SAMPLE_CREATE_ORDER_TYPE`, including `Market`. The BCS
+API rejects non-positive prices, so set a placeholder positive value if your backend ignores price for market orders.
 
 ## Raw Auth Boundary
 
