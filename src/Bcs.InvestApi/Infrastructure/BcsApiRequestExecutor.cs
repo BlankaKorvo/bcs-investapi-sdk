@@ -3,6 +3,7 @@ namespace Bcs.InvestApi.Infrastructure;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Bcs.InvestApi.Contracts.Errors;
 using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Tokens;
 
@@ -124,7 +125,38 @@ internal sealed class BcsApiRequestExecutor
             return;
         }
 
-        throw new BcsApiException(statusCode, responseBody, endpointName);
+        throw new BcsApiException(statusCode, responseBody, endpointName, TryParseApiError(responseBody));
+    }
+
+    private static BcsApiErrorResponse? TryParseApiError(string responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return null;
+        }
+
+        BcsApiErrorResponse? error;
+        try
+        {
+            error = JsonSerializer.Deserialize<BcsApiErrorResponse>(responseBody, BcsJson.SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (error is null)
+        {
+            return null;
+        }
+
+        var hasContent = error.Timestamp != 0
+            || !string.IsNullOrEmpty(error.TraceId)
+            || !string.IsNullOrEmpty(error.Type)
+            || error.Errors.Count > 0
+            || error.DisplayOptions is not null;
+
+        return hasContent ? error : null;
     }
 
     private static bool IsInvalidToken(HttpResponseMessage response) =>

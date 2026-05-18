@@ -6,10 +6,6 @@ public sealed record BcsPortfolioItem
 {
     public string? Type { get; init; }
 
-    public Guid? SubAccountId { get; init; }
-
-    public Guid? AgreementId { get; init; }
-
     public string? Account { get; init; }
 
     public string? Exchange { get; init; }

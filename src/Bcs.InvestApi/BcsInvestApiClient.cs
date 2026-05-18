@@ -90,6 +90,14 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         return _tradingSchedule.GetDailyTradingScheduleAsync(classCode, ticker, cancellationToken);
     }
 
+    public Task<BcsTradingScheduleStatusResponse> GetTradingScheduleStatusAsync(
+        string classCode,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _tradingSchedule.GetTradingScheduleStatusAsync(classCode, cancellationToken);
+    }
+
     public Task<BcsCandlesResponse> GetCandlesAsync(
         string classCode,
         string ticker,

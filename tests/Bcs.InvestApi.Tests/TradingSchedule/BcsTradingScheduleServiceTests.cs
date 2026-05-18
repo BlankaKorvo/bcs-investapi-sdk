@@ -2,7 +2,9 @@ namespace Bcs.InvestApi.Tests.TradingSchedule;
 
 using System.Net;
 using Bcs.InvestApi;
+using Bcs.InvestApi.Contracts.Errors;
 using Bcs.InvestApi.Contracts.Exceptions;
+using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tests.Infrastructure;
@@ -42,8 +44,8 @@ public sealed class BcsTradingScheduleServiceTests
         var entry = Assert.Single(schedule.DailySchedule);
         Assert.Equal(new TimeOnly(10, 00, 00), entry.StartDate);
         Assert.Equal(new TimeOnly(18, 40, 00), entry.EndDate);
-        Assert.Equal("Торговый период", entry.TradingSessionType);
-        Assert.Equal("OPEN", entry.TradingSessionStatus);
+        Assert.Equal(BcsTradingSessionTypes.TradingPeriod, entry.TradingSessionType);
+        Assert.Equal(BcsTradingSessionStatuses.Open, entry.TradingSessionStatus);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
     }
@@ -144,6 +146,108 @@ public sealed class BcsTradingScheduleServiceTests
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
             service.GetDailyTradingScheduleAsync(classCode!, ticker!));
+    }
+
+    [Fact]
+    public async Task GetTradingScheduleStatusAsync_DeserializesResponse()
+    {
+        const string statusJson = """
+        {
+          "tradingSessionTypeId": 5,
+          "tradingSessionType": "Торговый период",
+          "tradingSessionStatus": "OPEN",
+          "nextSessionDate": "2024-07-29T15:51:28.071Z"
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, statusJson)));
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var status = await service.GetTradingScheduleStatusAsync("TQBR");
+
+        Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/trading-schedule/status?classCode=TQBR"),
+            handler.LastRequest?.RequestUri);
+        Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
+        Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
+
+        Assert.Equal(5, status.TradingSessionTypeId);
+        Assert.Equal(BcsTradingSessionTypes.TradingPeriod, status.TradingSessionType);
+        Assert.Equal(BcsTradingSessionStatuses.Open, status.TradingSessionStatus);
+        Assert.Equal(
+            new DateTimeOffset(2024, 07, 29, 15, 51, 28, 071, TimeSpan.Zero),
+            status.NextSessionDate);
+    }
+
+    [Fact]
+    public async Task GetTradingScheduleStatusAsync_EncodesClassCode()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetTradingScheduleStatusAsync(" TQBR ");
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-information-service/api/v1/trading-schedule/status?classCode=%20TQBR%20"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GetTradingScheduleStatusAsync_WithNullOrEmptyClassCode_Throws(string? classCode)
+    {
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(new CapturingHttpMessageHandler((_, _) =>
+                Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")))),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            service.GetTradingScheduleStatusAsync(classCode!));
+    }
+
+    [Fact]
+    public async Task GetTradingScheduleStatusAsync_TooManyRequests_ThrowsWithApiError()
+    {
+        const string errorJson = """
+        {
+          "timestamp": 1715000000,
+          "traceId": "trace-status-1",
+          "type": "RESOURCE_EXHAUSTED",
+          "errors": [],
+          "displayOptions": {}
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.TooManyRequests, errorJson)));
+        var service = new BcsTradingScheduleService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
+            service.GetTradingScheduleStatusAsync("TQBR"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
+        Assert.Equal("trading-schedule-status", exception.Endpoint);
+        Assert.NotNull(exception.ApiError);
+        Assert.Equal(BcsApiErrorTypes.ResourceExhausted, exception.ApiError!.Type);
+        Assert.Equal("trace-status-1", exception.ApiError.TraceId);
     }
 
     private static BcsInvestApiSettings CreateSettings() =>

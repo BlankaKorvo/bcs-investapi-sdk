@@ -15,6 +15,8 @@ internal static class BcsEndpointPaths
     internal static class TradingSchedule
     {
         internal const string DailySchedule = InformationService + "/trading-schedule/daily-schedule";
+
+        internal const string Status = InformationService + "/trading-schedule/status";
     }
 
     internal static class Instruments

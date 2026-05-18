@@ -15,7 +15,6 @@ public sealed record BcsInstrument
 
     public string? Type { get; init; }
 
-    [JsonPropertyName("isin")]
     public string? Isin { get; init; }
 
     public string? RegistrationCode { get; init; }
@@ -30,7 +29,6 @@ public sealed record BcsInstrument
 
     public decimal? MinimumStep { get; init; }
 
-    [JsonPropertyName("accruedInt")]
     public decimal? AccruedInt { get; init; }
 
     public string? CurrencyStepPrice { get; init; }
@@ -46,9 +44,6 @@ public sealed record BcsInstrument
     public string? MaturityDate { get; init; }
 
     public decimal? LotSize { get; init; }
-
-    [JsonPropertyName("promoIdx")]
-    public int? PromoIdx { get; init; }
 
     public bool? IsQualifiedOnly { get; init; }
 
@@ -66,10 +61,7 @@ public sealed record BcsInstrument
 
     public decimal? StepPrice { get; init; }
 
-    [JsonPropertyName("isBcsProduct")]
     public bool? IsBcsProduct { get; init; }
-
-    public string? LogoLink { get; init; }
 
     public long? CouponsPerYear { get; init; }
 
@@ -87,16 +79,12 @@ public sealed record BcsInstrument
 
     public string? BusinessSector { get; init; }
 
-    [JsonPropertyName("peNorm")]
     public decimal? PeNorm { get; init; }
 
-    [JsonPropertyName("priceTangible")]
     public decimal? PriceTangible { get; init; }
 
-    [JsonPropertyName("epsGrowthRate")]
     public decimal? EpsGrowthRate { get; init; }
 
-    [JsonPropertyName("predictedDps")]
     public decimal? PredictedDps { get; init; }
 
     public decimal? DividendYield { get; init; }
@@ -105,7 +93,6 @@ public sealed record BcsInstrument
 
     public decimal? TargetPrice { get; init; }
 
-    [JsonPropertyName("mktcap")]
     public decimal? Mktcap { get; init; }
 
     public bool? IsBlocked { get; init; }
@@ -127,22 +114,14 @@ public sealed record BcsInstrument
 
     public string? EmissionDate { get; init; }
 
-    public int? ExcludeTypeFlags { get; init; }
-
     public string? CreditRating { get; init; }
 
     public string? LiquidityRating { get; init; }
 
-    [JsonPropertyName("bcsScore")]
     public int? BcsScore { get; init; }
 
-    [JsonPropertyName("bcsScoreColor")]
     public string? BcsScoreColor { get; init; }
 
-    [JsonPropertyName("cfi")]
-    public string? Cfi { get; init; }
-
-    [JsonPropertyName("nrdCode")]
     public string? NrdCode { get; init; }
 
     public decimal? Strike { get; init; }
@@ -161,14 +140,8 @@ public sealed record BcsInstrument
 
     public decimal? PriceChangeEarlyYear { get; init; }
 
-    public IReadOnlyList<int> ExcludeTypes { get; init; } =
-        Array.Empty<int>();
-
-    public string? DisplayNameSecond { get; init; }
-
     public string? FirstCurrCode { get; init; }
 
-    [JsonPropertyName("amortisedMty")]
     public bool? AmortisedMty { get; init; }
 }
 

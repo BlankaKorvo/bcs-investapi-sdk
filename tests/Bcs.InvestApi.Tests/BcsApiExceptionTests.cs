@@ -2,6 +2,7 @@ namespace Bcs.InvestApi.Tests;
 
 using System.Net;
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Errors;
 using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
@@ -177,10 +178,13 @@ public sealed class BcsApiExceptionTests
     {
         const string errorJson = """
         {
-          "timestamp": 0,
+          "timestamp": 1715000000,
           "traceId": "trace-3",
           "type": "RESOURCE_EXHAUSTED",
-          "errors": []
+          "errors": [
+            { "type": "RATE_LIMIT", "field": "requestsPerMinute", "payload": { "limit": 100 } }
+          ],
+          "displayOptions": { "retryAfter": 60 }
         }
         """;
 
@@ -199,7 +203,37 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(errorJson, exception.ResponseBody);
         Assert.Equal("daily-trading-schedule", exception.Endpoint);
         Assert.Contains("daily-trading-schedule", exception.Message);
+        Assert.Contains("Type='RESOURCE_EXHAUSTED'", exception.Message);
+        Assert.Contains("TraceId='trace-3'", exception.Message);
+
+        Assert.NotNull(exception.ApiError);
+        Assert.Equal(1715000000, exception.ApiError!.Timestamp);
+        Assert.Equal("trace-3", exception.ApiError.TraceId);
+        Assert.Equal(BcsApiErrorTypes.ResourceExhausted, exception.ApiError.Type);
+        Assert.Single(exception.ApiError.Errors);
+        Assert.Equal("RATE_LIMIT", exception.ApiError.Errors[0].Type);
+        Assert.Equal("requestsPerMinute", exception.ApiError.Errors[0].Field);
+        Assert.NotNull(exception.ApiError.DisplayOptions);
         Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetLimitsAsync_LegacyErrorBody_ApiErrorIsNull()
+    {
+        const string errorJson = """{"code":"limit_exceeded","message":"Daily limit exceeded"}""";
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.TooManyRequests, errorJson)));
+        var service = new BcsLimitsService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+
+        Assert.Null(exception.ApiError);
+        Assert.Equal(errorJson, exception.ResponseBody);
     }
 
     private static IBcsHttpSender CreateReadSender() =>

@@ -97,6 +97,7 @@ internal sealed class BcsInstrumentsService
         var typeValue = type.ToApiValue();
         ValidatePage(page);
         ValidateSize(size);
+        ValidateBaseAssetTicker(type, baseAssetTicker);
 
         return await SendTypePageAsync(
             typeValue,
@@ -105,6 +106,16 @@ internal sealed class BcsInstrumentsService
             size,
             cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static void ValidateBaseAssetTicker(BcsInstrumentTypes type, string? baseAssetTicker)
+    {
+        if (type == BcsInstrumentTypes.Options && string.IsNullOrWhiteSpace(baseAssetTicker))
+        {
+            throw new ArgumentException(
+                "baseAssetTicker is required when type is OPTIONS.",
+                nameof(baseAssetTicker));
+        }
     }
 
     private async Task<IReadOnlyList<BcsInstrument>> SendPageAsync(
@@ -290,14 +301,16 @@ internal sealed class BcsInstrumentsService
         }
     }
 
+    private const int MaxPageSize = 100;
+
     private static void ValidateSize(int size)
     {
-        if (size < 1)
+        if (size is < 1 or > MaxPageSize)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(size),
                 size,
-                "Page size must be greater than or equal to one.");
+                $"Page size must be between 1 and {MaxPageSize}.");
         }
     }
 }

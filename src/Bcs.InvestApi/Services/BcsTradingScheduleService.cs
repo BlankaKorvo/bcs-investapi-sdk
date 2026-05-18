@@ -8,6 +8,7 @@ using Bcs.InvestApi.Tokens;
 internal sealed class BcsTradingScheduleService
 {
     private readonly Uri _dailyScheduleUrl;
+    private readonly Uri _statusUrl;
     private readonly BcsApiRequestExecutor _executor;
 
     internal BcsTradingScheduleService(
@@ -37,6 +38,7 @@ internal sealed class BcsTradingScheduleService
 
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _dailyScheduleUrl = settings.CreateEndpointUrl(BcsEndpointPaths.TradingSchedule.DailySchedule);
+        _statusUrl = settings.CreateEndpointUrl(BcsEndpointPaths.TradingSchedule.Status);
     }
 
     internal Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
@@ -53,6 +55,18 @@ internal sealed class BcsTradingScheduleService
             cancellationToken);
     }
 
+    internal Task<BcsTradingScheduleStatusResponse> GetTradingScheduleStatusAsync(
+        string classCode,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(classCode);
+
+        return _executor.SendJsonAsync<BcsTradingScheduleStatusResponse>(
+            accessToken => CreateStatusRequestMessage(accessToken, classCode),
+            "trading-schedule-status",
+            cancellationToken);
+    }
+
     private HttpRequestMessage CreateRequestMessage(
         string accessToken,
         string classCode,
@@ -65,6 +79,17 @@ internal sealed class BcsTradingScheduleService
             .AcceptJson();
     }
 
+    private HttpRequestMessage CreateStatusRequestMessage(
+        string accessToken,
+        string classCode)
+    {
+        return new HttpRequestMessage(
+                HttpMethod.Get,
+                CreateStatusUrl(classCode))
+            .WithBearer(accessToken)
+            .AcceptJson();
+    }
+
     private Uri CreateDailyScheduleUrl(string classCode, string ticker)
     {
         var query = string.Create(
@@ -72,6 +97,20 @@ internal sealed class BcsTradingScheduleService
             $"classCode={Uri.EscapeDataString(classCode)}&ticker={Uri.EscapeDataString(ticker)}");
 
         var builder = new UriBuilder(_dailyScheduleUrl)
+        {
+            Query = query,
+        };
+
+        return builder.Uri;
+    }
+
+    private Uri CreateStatusUrl(string classCode)
+    {
+        var query = string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"classCode={Uri.EscapeDataString(classCode)}");
+
+        var builder = new UriBuilder(_statusUrl)
         {
             Query = query,
         };

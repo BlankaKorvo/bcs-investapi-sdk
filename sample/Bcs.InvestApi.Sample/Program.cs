@@ -107,14 +107,14 @@ foreach (var bar in candles.Bars.Take(10))
         $"  {bar.Time:O}: O={bar.Open} H={bar.High} L={bar.Low} C={bar.Close} V={bar.Volume}");
 }
 
-//var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
-//Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
+var schedule = await client.GetDailyTradingScheduleAsync(classCode, ticker);
+Console.WriteLine($"Daily schedule for {classCode}/{ticker}: work day = {schedule.IsWorkDay}, intervals = {schedule.DailySchedule.Count}");
 
-//foreach (var interval in schedule.DailySchedule)
-//{
-//    Console.WriteLine(
-//        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
-//}
+foreach (var interval in schedule.DailySchedule)
+{
+    Console.WriteLine(
+        $"  {interval.StartDate:HH:mm:ss}-{interval.EndDate:HH:mm:ss}: {interval.TradingSessionType} ({interval.TradingSessionStatus})");
+}
 
 var ordersEnd = DateTimeOffset.UtcNow;
 var ordersStart = ordersEnd.AddDays(-500);
