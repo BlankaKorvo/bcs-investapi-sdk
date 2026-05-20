@@ -39,8 +39,8 @@ net10.0
 - Lazy access-token refresh before token expiration.
 - Internal token manager that authorizes SDK HTTP requests.
 - Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, daily trading schedule, instruments, historical candles, order creation,
-  order status, order search, order update, and order cancellation.
+- Raw endpoint methods for limits, portfolio, trading schedule, instruments, historical candles, orders, trades, and
+  marginal instrument discounts.
 
 ## Endpoint Catalog
 
@@ -51,6 +51,7 @@ Endpoints are grouped by domain on the client (e.g. `client.Orders.CreateOrderAs
 | `Limits.GetLimitsAsync` | `GET /trade-api-bff-limit/api/v1/limits` |
 | `Portfolio.GetPortfolioAsync` | `GET /trade-api-bff-portfolio/api/v1/portfolio` |
 | `TradingSchedule.GetDailyTradingScheduleAsync` | `GET /trade-api-information-service/api/v1/trading-schedule/daily-schedule` |
+| `TradingSchedule.GetTradingScheduleStatusAsync` | `GET /trade-api-information-service/api/v1/trading-schedule/status` |
 | `Instruments.GetInstrumentsByIsinsAsync` | `POST /trade-api-information-service/api/v1/instruments/by-isins` |
 | `Instruments.GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
 | `Instruments.GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
@@ -65,8 +66,8 @@ Endpoints are grouped by domain on the client (e.g. `client.Orders.CreateOrderAs
 
 ## WebSocket Streams
 
-The SDK provides authenticated WebSocket connection plumbing only. Connection lifecycle — reconnect,
-backoff, ping/pong, multiplexing, and message dispatch — belongs to the application layer (see
+The SDK provides authenticated WebSocket connection plumbing only. Connection lifecycle - reconnect,
+backoff, ping/pong, multiplexing, and message dispatch - belongs to the application layer (see
 [ARCHITECTURE.md](ARCHITECTURE.md) scope matrix).
 
 - `WebSockets.ConnectAsync(Uri url, CancellationToken)` opens an authenticated `ClientWebSocket` (fresh Bearer token per call).
@@ -139,9 +140,9 @@ state is lost.
 
 ```csharp
 using Bcs.InvestApi;
-using Bcs.InvestApi.DependencyInjection;
 using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Orders;
+using Bcs.InvestApi.Contracts.Trades;
 
 var refreshToken = Environment.GetEnvironmentVariable("BCS_REFRESH_TOKEN")
     ?? throw new InvalidOperationException("BCS_REFRESH_TOKEN is not set.");
@@ -158,9 +159,11 @@ The following calls are independent direct endpoint examples, not an orchestrati
 ```csharp
 using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Orders;
+using Bcs.InvestApi.Contracts.Trades;
 
 var portfolio = await client.Portfolio.GetPortfolioAsync();
 var schedule = await client.TradingSchedule.GetDailyTradingScheduleAsync("TQBR", "SBER");
+var scheduleStatus = await client.TradingSchedule.GetTradingScheduleStatusAsync("TQBR");
 var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
     new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
     page: 0,
@@ -190,17 +193,45 @@ var orders = await client.Orders.SearchOrdersAsync(
     size: 50,
     sort: new[] { BcsOrderSort.OrderDateTimeDesc });
 var orderStatus = await client.Orders.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+var trades = await client.Trades.SearchTradesAsync(
+    new BcsTradesSearchRequest
+    {
+        StartDateTime = DateTimeOffset.UtcNow.AddDays(-7),
+        EndDateTime = DateTimeOffset.UtcNow,
+        Tickers = new[] { "SBER" },
+        ClassCodes = new[] { "TQBR" },
+    },
+    page: 0,
+    size: 50,
+    sort: new[] { BcsTradeSort.TradeDateTimeDesc });
+var marginDiscounts = await client.MarginalIndicators.GetInstrumentsDiscountsAsync();
 
-var updateResult = await client.Orders.UpdateOrderAsync(
+await using var writeClient = BcsInvestApiClientFactory.Create(
+    refreshToken: refreshToken,
+    clientId: BcsAuthClientIds.TradeApiWrite);
+
+var createResult = await writeClient.Orders.CreateOrderAsync(
+    new BcsCreateOrderRequest
+    {
+        ClientOrderId = Guid.NewGuid(),
+        Side = BcsOrderSide.Buy,
+        OrderType = BcsOrderType.Limit,
+        OrderQuantity = 10,
+        Ticker = "SBER",
+        ClassCode = "TQBR",
+        Price = 250.10m,
+    });
+
+var updateResult = await writeClient.Orders.UpdateOrderAsync(
     originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     request: new BcsUpdateOrderRequest
     {
         ClientOrderId = Guid.NewGuid(),
         OrderQuantity = 10,
-        Price = 9.540m,
+        Price = 250.20m,
     });
 
-var cancelResult = await client.Orders.CancelOrderAsync(
+var cancelResult = await writeClient.Orders.CancelOrderAsync(
     originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     clientOrderId: Guid.NewGuid());
 ```
@@ -225,9 +256,9 @@ shown above.
 
 ## Pagination
 
-SDK requests exactly one page. Instrument lookup and order search methods perform one BCS request per call; callers pass
-`page` and `size` explicitly and own any multi-page iteration policy. The server owns validation of supported values and
-max limits.
+SDK requests exactly one page. Instrument lookup, order search, and trade search methods perform one BCS request per
+call; callers pass `page` and `size` explicitly and own any multi-page iteration policy. The server owns validation of
+supported values and max limits.
 
 ```csharp
 var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
@@ -266,45 +297,109 @@ BCS allows at most 1440 candles in one request.
 
 ## Sample
 
-`sample/Bcs.InvestApi.Sample` is a minimal smoke-test console for raw endpoint calls. It is not recommended application
-architecture and intentionally does not show orchestration, hosting, logging, retries, background services, or
-portfolio/instrument/candle workflows.
+`sample/Bcs.InvestApi.Sample` is a command-based console for raw endpoint calls. It is not recommended application
+architecture and intentionally does not show orchestration, hosting, logging, retries, background services, or domain
+workflows.
 
-Select one endpoint with the first command-line argument or `BCS_SAMPLE_ENDPOINT`:
+Show available commands:
 
 ```bash
-BCS_SAMPLE_ENDPOINT=limits dotnet run --project sample/Bcs.InvestApi.Sample
-dotnet run --project sample/Bcs.InvestApi.Sample -- candles
+dotnet run --project sample/Bcs.InvestApi.Sample -- help
 ```
 
-Supported values are `limits`, `portfolio`, `candles`, and `instruments-by-ticker`. The sample requires
-`BCS_REFRESH_TOKEN` and does not include real tokens.
+Run one command with the first command-line argument, `BCS_SAMPLE_COMMAND`, or the legacy `BCS_SAMPLE_ENDPOINT`:
 
-Order search runs in the sample smoke flow. Other order calls are guarded by explicit environment variables:
+```bash
+dotnet run --project sample/Bcs.InvestApi.Sample -- limits
+dotnet run --project sample/Bcs.InvestApi.Sample -- candles
+dotnet run --project sample/Bcs.InvestApi.Sample -- stream-quotes
+```
+
+Supported read commands:
+
+```text
+smoke
+limits
+portfolio
+instruments-by-isin
+instruments-by-ticker
+instruments-by-type
+candles
+schedule
+schedule-status
+orders
+order-status
+trades
+margin-discounts
+```
+
+Supported WebSocket commands:
+
+```text
+stream-candles
+stream-orderbook
+stream-quotes
+stream-trades
+stream-limits
+stream-portfolio
+stream-order-executions
+stream-order-transactions
+stream-margin
+```
+
+Trading commands are explicit and use `trade-api-write` by default:
+
+```text
+order-create
+order-update
+order-cancel
+```
+
+The sample requires `BCS_REFRESH_TOKEN` for all commands except `help` and does not include real tokens.
+
+Common environment variables:
+
+| Variable | Default | Used by |
+|---|---:|---|
+| `BCS_SAMPLE_CLIENT_ID` | `read` or `write` for trading commands | all commands |
+| `BCS_SAMPLE_CLASS_CODE` | `TQBR` | instrument, market data, schedule, orders, trades, streams |
+| `BCS_SAMPLE_TICKER` | `SBER` | instrument, market data, schedule, orders, trades, streams |
+| `BCS_SAMPLE_ISINS` | `RU0009029540,RU0007661625,RU000A0J2Q06` | `instruments-by-isin` |
+| `BCS_SAMPLE_TICKERS` | `SBER,GAZP,ROSN` | `instruments-by-ticker` |
+| `BCS_SAMPLE_PAGE` | `0` | paged HTTP commands |
+| `BCS_SAMPLE_SIZE` | `10` | paged HTTP commands |
+| `BCS_SAMPLE_SEARCH_FROM` | UTC now minus 7 days | `orders`, `trades` |
+| `BCS_SAMPLE_SEARCH_TO` | UTC now | `orders`, `trades` |
+| `BCS_SAMPLE_CANDLE_TIMEFRAME` | `Minute1` | `candles`, `stream-candles` |
+| `BCS_SAMPLE_CANDLES_FROM` | UTC now minus 1 day | `candles` |
+| `BCS_SAMPLE_CANDLES_TO` | UTC now | `candles` |
+| `BCS_SAMPLE_INSTRUMENT_TYPE` | `Stock` | `instruments-by-type` |
+| `BCS_SAMPLE_BASE_ASSET_TICKER` | unset | `instruments-by-type` |
+| `BCS_SAMPLE_STREAM_MESSAGES` | `5` | stream commands |
+| `BCS_SAMPLE_STREAM_TIMEOUT_SECONDS` | `30` | stream commands |
+| `BCS_SAMPLE_ORDERBOOK_DEPTH` | `20` | `stream-orderbook` |
+
+Order-specific variables:
 
 | Operation | Required | Optional |
 |---|---|---|
-| Status | `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` | — |
-| Create | `BCS_SAMPLE_CREATE_ORDER=true`, `BCS_SAMPLE_CREATE_ORDER_QUANTITY`, `BCS_SAMPLE_CREATE_PRICE` | `BCS_SAMPLE_CREATE_CLIENT_ORDER_ID`, `BCS_SAMPLE_CREATE_SIDE` (default `Buy`), `BCS_SAMPLE_CREATE_ORDER_TYPE` (default `Limit`) |
-| Update | `BCS_SAMPLE_UPDATE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_UPDATE_ORDER_QUANTITY`, `BCS_SAMPLE_UPDATE_PRICE` | `BCS_SAMPLE_UPDATE_CLIENT_ORDER_ID` |
-| Cancel | `BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CANCEL_CLIENT_ORDER_ID` |
+| Status | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | legacy alias: `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` |
+| Create | `BCS_SAMPLE_ORDER_QUANTITY`; `BCS_SAMPLE_ORDER_PRICE` for non-market orders | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_SIDE` (default `Buy`), `BCS_SAMPLE_ORDER_TYPE` (default `Limit`) |
+| Update | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_QUANTITY` | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_PRICE` |
+| Cancel | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CLIENT_ORDER_ID` |
 
-Create/update/cancel use `trade-api-write` unless `BCS_SAMPLE_CLIENT_ID` is explicitly set. All env-var configuration is
-validated up front; bad values fail fast with a non-zero exit code before any network call.
-
-Accepted boolean values for `BCS_SAMPLE_CREATE_ORDER` (case-insensitive): `1`, `true`, `yes`, `on` (enable); `0`,
-`false`, `no`, `off` (disable). Any other value is rejected.
-
-`BCS_SAMPLE_CREATE_PRICE` is currently required for every `BCS_SAMPLE_CREATE_ORDER_TYPE`, including `Market`. The BCS
-API rejects non-positive prices, so set a placeholder positive value if your backend ignores price for market orders.
+Legacy create/update/cancel variable aliases from older sample versions are still accepted where practical
+(`BCS_SAMPLE_CREATE_*`, `BCS_SAMPLE_UPDATE_*`, `BCS_SAMPLE_CANCEL_*`). Bad env-var values fail fast with a non-zero exit
+code before any network call.
 
 ## Raw Auth Boundary
 
 `BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs, refresh tokens, or access-token lifecycle
 controls. Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use broker API
 methods such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
-`GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`, `GetOrderStatusAsync(...)`,
-`SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, and `CancelOrderAsync(...)`.
+`GetTradingScheduleStatusAsync(...)`, `GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`,
+`GetOrderStatusAsync(...)`, `SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, `CancelOrderAsync(...)`,
+`SearchTradesAsync(...)`, and `GetInstrumentsDiscountsAsync(...)`.
 
 If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make refresh-token
 exposure explicit in that API.
