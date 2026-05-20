@@ -129,6 +129,111 @@ public sealed class BcsWebSocketExtensionsTests
             socket!.ReceiveJsonMessageAsync<BcsLimitsResponse>());
     }
 
+    [Fact]
+    public async Task SendJsonMessageAsync_SerializesWithWebOptionsAsSingleTextFrame()
+    {
+        var socket = new FakeWebSocket(Array.Empty<FakeWebSocket.Frame>());
+
+        await socket.SendJsonMessageAsync(new SubscribeProbe
+        {
+            SubscribeType = "subscribe",
+            ClassCode = "TQBR",
+        });
+
+        var sent = Assert.Single(socket.SentFrames);
+        Assert.Equal(WebSocketMessageType.Text, sent.MessageType);
+        Assert.True(sent.EndOfMessage);
+
+        var json = Encoding.UTF8.GetString(sent.Payload);
+        Assert.Equal("""{"subscribeType":"subscribe","classCode":"TQBR"}""", json);
+    }
+
+    [Fact]
+    public async Task SendJsonMessageAsync_NullWebSocket_Throws()
+    {
+        WebSocket? socket = null;
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            socket!.SendJsonMessageAsync(new SubscribeProbe()));
+    }
+
+    [Fact]
+    public async Task ReadAllAsync_YieldsMessagesUntilCleanClose()
+    {
+        var first = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
+        var second = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Data(first, WebSocketMessageType.Text, endOfMessage: true),
+            FakeWebSocket.Frame.Data(second, WebSocketMessageType.Text, endOfMessage: true),
+            FakeWebSocket.Frame.Close(),
+        });
+
+        var received = new List<BcsLimitsResponse>();
+        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>())
+        {
+            received.Add(message);
+        }
+
+        Assert.Equal(2, received.Count);
+        Assert.All(received, message => Assert.Empty(message.DepoLimit));
+    }
+
+    [Fact]
+    public async Task ReadAllAsync_CloseBeforeAnyData_YieldsNothing()
+    {
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Close(),
+        });
+
+        var received = new List<BcsLimitsResponse>();
+        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>())
+        {
+            received.Add(message);
+        }
+
+        Assert.Empty(received);
+    }
+
+    [Fact]
+    public async Task ReadAllAsync_CloseMidMessage_Throws()
+    {
+        var payload = Encoding.UTF8.GetBytes("""{"depoLimit":[]""");
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Data(payload, WebSocketMessageType.Text, endOfMessage: false),
+            FakeWebSocket.Frame.Close(),
+        });
+
+        await Assert.ThrowsAsync<WebSocketException>(async () =>
+        {
+            await foreach (var _ in socket.ReadAllAsync<BcsLimitsResponse>())
+            {
+            }
+        });
+    }
+
+    [Fact]
+    public async Task ReadAllAsync_NullWebSocket_Throws()
+    {
+        WebSocket? socket = null;
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await foreach (var _ in socket!.ReadAllAsync<BcsLimitsResponse>())
+            {
+            }
+        });
+    }
+
+    private sealed record SubscribeProbe
+    {
+        public string? SubscribeType { get; init; }
+
+        public string? ClassCode { get; init; }
+    }
+
     private sealed class FakeWebSocket : WebSocket
     {
         private readonly Queue<Frame> _frames;
@@ -139,6 +244,8 @@ public sealed class BcsWebSocketExtensionsTests
         {
             _frames = new Queue<Frame>(frames);
         }
+
+        public List<Frame> SentFrames { get; } = new();
 
         public override WebSocketCloseStatus? CloseStatus => null;
         public override string? CloseStatusDescription => null;
@@ -194,8 +301,11 @@ public sealed class BcsWebSocketExtensionsTests
                 endOfMessage: endOfMessage));
         }
 
-        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+        {
+            SentFrames.Add(new Frame(buffer.ToArray(), messageType, endOfMessage, IsClose: false));
+            return Task.CompletedTask;
+        }
 
         internal sealed record Frame(byte[] Payload, WebSocketMessageType MessageType, bool EndOfMessage, bool IsClose)
         {

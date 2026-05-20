@@ -1,7 +1,4 @@
 using System.Globalization;
-using System.Net.WebSockets;
-using System.Text;
-using System.Text.Json;
 using Bcs.InvestApi;
 using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Limits;
@@ -295,8 +292,7 @@ static async Task StreamLastCandlesAsync(BcsInvestApiClient client, string class
         },
     };
 
-    var payload = JsonSerializer.SerializeToUtf8Bytes(subscribe, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-    await socket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
+    await socket.SendJsonMessageAsync(subscribe);
     Console.WriteLine("Subscribed; waiting for up to 5 candle messages (30s timeout)...");
 
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -335,8 +331,7 @@ static async Task StreamLastCandlesAsync(BcsInvestApiClient client, string class
 
         // Politely unsubscribe with the same payload shape.
         var unsubscribe = subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe };
-        var unsubscribePayload = JsonSerializer.SerializeToUtf8Bytes(unsubscribe, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        await socket.SendAsync(unsubscribePayload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
+        await socket.SendJsonMessageAsync(unsubscribe);
     }
     catch (OperationCanceledException)
     {
@@ -361,12 +356,7 @@ static async Task StreamOrderBookAsync(BcsInvestApiClient client, string classCo
         },
     };
 
-    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-    await socket.SendAsync(
-        JsonSerializer.SerializeToUtf8Bytes(subscribe, options),
-        WebSocketMessageType.Text,
-        endOfMessage: true,
-        CancellationToken.None);
+    await socket.SendJsonMessageAsync(subscribe);
     Console.WriteLine("Subscribed; waiting for up to 5 order-book messages (30s timeout)...");
 
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -408,11 +398,7 @@ static async Task StreamOrderBookAsync(BcsInvestApiClient client, string classCo
         }
 
         var unsubscribe = subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe };
-        await socket.SendAsync(
-            JsonSerializer.SerializeToUtf8Bytes(unsubscribe, options),
-            WebSocketMessageType.Text,
-            endOfMessage: true,
-            CancellationToken.None);
+        await socket.SendJsonMessageAsync(unsubscribe);
     }
     catch (OperationCanceledException)
     {
@@ -436,12 +422,7 @@ static async Task StreamQuotesAsync(BcsInvestApiClient client, string classCode,
         },
     };
 
-    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-    await socket.SendAsync(
-        JsonSerializer.SerializeToUtf8Bytes(subscribe, options),
-        WebSocketMessageType.Text,
-        endOfMessage: true,
-        CancellationToken.None);
+    await socket.SendJsonMessageAsync(subscribe);
     Console.WriteLine("Subscribed; waiting for up to 5 quote messages (30s timeout)...");
 
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -473,11 +454,7 @@ static async Task StreamQuotesAsync(BcsInvestApiClient client, string classCode,
         }
 
         var unsubscribe = subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe };
-        await socket.SendAsync(
-            JsonSerializer.SerializeToUtf8Bytes(unsubscribe, options),
-            WebSocketMessageType.Text,
-            endOfMessage: true,
-            CancellationToken.None);
+        await socket.SendJsonMessageAsync(unsubscribe);
     }
     catch (OperationCanceledException)
     {
@@ -501,12 +478,7 @@ static async Task StreamLastTradesAsync(BcsInvestApiClient client, string classC
         },
     };
 
-    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-    await socket.SendAsync(
-        JsonSerializer.SerializeToUtf8Bytes(subscribe, options),
-        WebSocketMessageType.Text,
-        endOfMessage: true,
-        CancellationToken.None);
+    await socket.SendJsonMessageAsync(subscribe);
     Console.WriteLine("Subscribed; waiting for up to 5 trade messages (30s timeout)...");
 
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -545,11 +517,7 @@ static async Task StreamLastTradesAsync(BcsInvestApiClient client, string classC
         }
 
         var unsubscribe = subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe };
-        await socket.SendAsync(
-            JsonSerializer.SerializeToUtf8Bytes(unsubscribe, options),
-            WebSocketMessageType.Text,
-            endOfMessage: true,
-            CancellationToken.None);
+        await socket.SendJsonMessageAsync(unsubscribe);
     }
     catch (OperationCanceledException)
     {
@@ -567,17 +535,16 @@ static async Task StreamLimitsAsync(BcsInvestApiClient client)
 
     try
     {
-        for (var received = 0; received < 3; received++)
+        var received = 0;
+        await foreach (var limits in socket.ReadAllAsync<BcsLimitsResponse>(cts.Token))
         {
-            var limits = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(cts.Token);
-            if (limits is null)
-            {
-                Console.WriteLine("  Stream closed by server.");
-                break;
-            }
-
             Console.WriteLine(
                 $"  Update: depo={limits.DepoLimit.Count}, futureHoldings={limits.FutureHolding.Count}, money={limits.MoneyLimits.Count}, futures={limits.FuturesLimits.Count}");
+
+            if (++received == 3)
+            {
+                break;
+            }
         }
     }
     catch (OperationCanceledException)

@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.WebSockets;
 
 /// <summary>
 /// Static URL constants for BCS Trade API WebSocket streams.
-/// Use with <see cref="BcsInvestApiClient.ConnectWebSocketAsync"/>.
+/// Use with <see cref="BcsWebSocketConnector.ConnectAsync"/> (via <see cref="BcsInvestApiClient.WebSockets"/>).
 /// Add new entries as their docs are reviewed against the published contract.
 /// </summary>
 public static class BcsWebSocketEndpoints
