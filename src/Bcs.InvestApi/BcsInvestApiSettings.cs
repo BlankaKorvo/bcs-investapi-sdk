@@ -1,6 +1,8 @@
 namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Infrastructure;
+using Bcs.InvestApi.Tokens;
 
 public sealed class BcsInvestApiSettings
 {
@@ -51,6 +53,35 @@ public sealed class BcsInvestApiSettings
     /// </summary>
     public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Interval between keep-alive pings the client sends on a WebSocket connection.
+    /// .NET also answers the server's pings automatically while a receive is pending.
+    /// BCS pings every 30 seconds; the default mirrors that cadence.
+    /// Set to <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> to disable client keep-alive entirely.
+    /// </summary>
+    public TimeSpan WebSocketKeepAliveInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long to wait for a pong before the WebSocket connection is treated as dead and aborted.
+    /// Default: 20 seconds. Set to <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> to disable
+    /// timeout-based abort (the client still pings, but a missing pong will not force a disconnect).
+    /// </summary>
+    public TimeSpan WebSocketKeepAliveTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Optional diagnostics callback invoked after every successful refresh-token exchange.
+    /// Use it to log token rotation cadence and bootstrap-vs-rotated provenance. The payload carries
+    /// no token values. Exceptions thrown by the callback are swallowed and never break the auth flow.
+    /// </summary>
+    public Action<BcsTokenRefreshInfo>? OnTokenRefreshed { get; set; }
+
+    /// <summary>
+    /// Optional diagnostics callback invoked when a refresh-token exchange fails
+    /// (auth error, timeout, transport failure). Exceptions thrown by the callback are swallowed
+    /// and never break the auth flow.
+    /// </summary>
+    public Action<BcsTokenRefreshFailure>? OnTokenRefreshFailed { get; set; }
+
     internal string GetRequiredRefreshToken()
     {
         ValidateRefreshToken();
@@ -63,7 +94,7 @@ public sealed class BcsInvestApiSettings
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ValidateBaseUrl();
 
-        return new Uri(EnsureTrailingSlash(BaseUrl), relativePath);
+        return new Uri(BcsUri.EnsureTrailingSlash(BaseUrl), relativePath);
     }
 
     internal void ValidateBaseUrl()
@@ -133,13 +164,21 @@ public sealed class BcsInvestApiSettings
         }
     }
 
-    private static Uri EnsureTrailingSlash(Uri uri)
+    internal void ValidateWebSocketKeepAlive()
     {
-        if (uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal))
+        if (WebSocketKeepAliveInterval <= TimeSpan.Zero &&
+            WebSocketKeepAliveInterval != System.Threading.Timeout.InfiniteTimeSpan)
         {
-            return uri;
+            throw new InvalidOperationException(
+                "BCS WebSocket keep-alive interval must be greater than zero or Timeout.InfiniteTimeSpan.");
         }
 
-        return new Uri(uri.AbsoluteUri + "/");
+        if (WebSocketKeepAliveTimeout <= TimeSpan.Zero &&
+            WebSocketKeepAliveTimeout != System.Threading.Timeout.InfiniteTimeSpan)
+        {
+            throw new InvalidOperationException(
+                "BCS WebSocket keep-alive timeout must be greater than zero or Timeout.InfiniteTimeSpan.");
+        }
     }
+
 }

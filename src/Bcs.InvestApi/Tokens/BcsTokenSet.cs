@@ -26,7 +26,7 @@ internal sealed record BcsTokenSet
 
     public string Scope { get; init; } = string.Empty;
 
-    public bool ShouldRefreshAccessToken(DateTimeOffset nowUtc, TimeSpan refreshSkew)
+    internal bool ShouldRefreshAccessToken(DateTimeOffset nowUtc, TimeSpan refreshSkew)
     {
         if (refreshSkew < TimeSpan.Zero)
         {
@@ -51,7 +51,7 @@ internal sealed record BcsTokenSet
         return !ShouldRefreshAccessToken(nowUtc, refreshSkew);
     }
 
-    public bool IsRefreshTokenExpired(DateTimeOffset nowUtc, TimeSpan refreshSkew)
+    internal bool IsRefreshTokenExpired(DateTimeOffset nowUtc, TimeSpan refreshSkew)
     {
         if (refreshSkew < TimeSpan.Zero)
         {

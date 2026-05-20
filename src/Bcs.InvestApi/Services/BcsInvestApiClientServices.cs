@@ -3,6 +3,7 @@ namespace Bcs.InvestApi.Services;
 using Bcs.InvestApi;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.WebSockets;
 
 internal sealed class BcsInvestApiClientServices
 {
@@ -13,7 +14,10 @@ internal sealed class BcsInvestApiClientServices
         BcsTradingScheduleService tradingSchedule,
         BcsInstrumentsService instruments,
         BcsMarketDataService marketData,
-        BcsOrdersService orders)
+        BcsOrdersService orders,
+        BcsTradesService trades,
+        BcsMarginalIndicatorsService marginalIndicators,
+        BcsWebSocketConnector webSockets)
     {
         Tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         Limits = limits ?? throw new ArgumentNullException(nameof(limits));
@@ -22,6 +26,9 @@ internal sealed class BcsInvestApiClientServices
         Instruments = instruments ?? throw new ArgumentNullException(nameof(instruments));
         MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
         Orders = orders ?? throw new ArgumentNullException(nameof(orders));
+        Trades = trades ?? throw new ArgumentNullException(nameof(trades));
+        MarginalIndicators = marginalIndicators ?? throw new ArgumentNullException(nameof(marginalIndicators));
+        WebSockets = webSockets ?? throw new ArgumentNullException(nameof(webSockets));
     }
 
     internal BcsTokenManager Tokens { get; }
@@ -38,6 +45,12 @@ internal sealed class BcsInvestApiClientServices
 
     internal BcsOrdersService Orders { get; }
 
+    internal BcsTradesService Trades { get; }
+
+    internal BcsMarginalIndicatorsService MarginalIndicators { get; }
+
+    internal BcsWebSocketConnector WebSockets { get; }
+
     internal static BcsInvestApiClientServices Create(
         BcsInvestApiSettings settings,
         HttpClient httpClient,
@@ -48,7 +61,7 @@ internal sealed class BcsInvestApiClientServices
         ArgumentNullException.ThrowIfNull(httpClient);
 
         var sender = requestSender ?? new BcsHttpRequestSender();
-        var auth = new BcsAuthService(httpClient, settings, sender);
+        var auth = BcsAuthService.ForSharedClient(httpClient, settings, sender);
         var tokens = new BcsTokenManager(auth, settings, timeProvider);
 
         return new BcsInvestApiClientServices(
@@ -58,7 +71,13 @@ internal sealed class BcsInvestApiClientServices
             new BcsTradingScheduleService(settings, httpClient, tokens, sender),
             new BcsInstrumentsService(settings, httpClient, tokens, sender),
             new BcsMarketDataService(settings, httpClient, tokens, sender),
-            new BcsOrdersService(settings, httpClient, tokens, sender));
+            new BcsOrdersService(settings, httpClient, tokens, sender),
+            new BcsTradesService(settings, httpClient, tokens, sender),
+            new BcsMarginalIndicatorsService(settings, httpClient, tokens, sender),
+            new BcsWebSocketConnector(
+                tokens,
+                settings.WebSocketKeepAliveInterval,
+                settings.WebSocketKeepAliveTimeout));
     }
 
     internal BcsInvestApiClient CreateClient(
@@ -72,6 +91,9 @@ internal sealed class BcsInvestApiClientServices
             Instruments,
             MarketData,
             Orders,
+            Trades,
+            MarginalIndicators,
+            WebSockets,
             ownsTokenManager,
             ownedTransport);
 }

@@ -110,7 +110,7 @@ public sealed class BcsOrdersServiceTests
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
         Assert.Null(handler.LastRequestContent);
-        Assert.Equal(clientOrderId, response.ClientOrderId);
+        Assert.Equal("12345678-1234-1234-9adb-123456789876", response.ClientOrderId);
         Assert.Equal("", response.OriginalClientOrderId);
 
         Assert.NotNull(response.Data);
@@ -292,6 +292,35 @@ public sealed class BcsOrdersServiceTests
     }
 
     [Fact]
+    public async Task CreateOrderAsync_WithoutPrice_OmitsPriceFromBody()
+    {
+        var clientOrderId = Guid.Parse("12345678-1234-1234-1234-123456789123");
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-1234-1234-1234-123456789123","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.CreateOrderAsync(
+            new BcsCreateOrderRequest
+            {
+                ClientOrderId = clientOrderId,
+                Side = BcsOrderSide.Buy,
+                OrderType = BcsOrderType.Market,
+                OrderQuantity = 10,
+                Ticker = "APTK",
+                ClassCode = "TQBR",
+                // Price intentionally omitted for a market order.
+            });
+
+        Assert.Equal(
+            """{"clientOrderId":"12345678-1234-1234-1234-123456789123","side":"1","orderType":"1","orderQuantity":10,"ticker":"APTK","classCode":"TQBR"}""",
+            handler.LastRequestContent);
+    }
+
+    [Fact]
     public async Task CreateOrderAsync_WithEmptyClientOrderId_Throws()
     {
         var service = CreateService();
@@ -444,6 +473,33 @@ public sealed class BcsOrdersServiceTests
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.CancelOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), Guid.Empty));
+    }
+
+    [Fact]
+    public async Task UpdateOrderAsync_WithoutPrice_OmitsPriceFromBody()
+    {
+        var originalClientOrderId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var clientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432");
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.UpdateOrderAsync(
+            originalClientOrderId,
+            new BcsUpdateOrderRequest
+            {
+                ClientOrderId = clientOrderId,
+                OrderQuantity = 10,
+                // Price intentionally omitted; docs mark price as optional.
+            });
+
+        Assert.Equal(
+            """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","orderQuantity":10}""",
+            handler.LastRequestContent);
     }
 
     [Fact]

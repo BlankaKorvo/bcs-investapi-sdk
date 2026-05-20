@@ -1,18 +1,18 @@
 namespace Bcs.InvestApi;
 
-using Bcs.InvestApi.Contracts.Enums;
-using Bcs.InvestApi.Contracts.Instruments;
-using Bcs.InvestApi.Contracts.Limits;
-using Bcs.InvestApi.Contracts.MarketData;
-using Bcs.InvestApi.Contracts.Orders;
-using Bcs.InvestApi.Contracts.Portfolio;
-using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Services;
 using Bcs.InvestApi.Tokens;
+using Bcs.InvestApi.WebSockets;
 
 /// <summary>
 /// Thin facade over BCS Trade API service clients.
 /// </summary>
+/// <remarks>
+/// Endpoint methods throw <see cref="Contracts.Exceptions.BcsApiException"/> on non-success responses and
+/// never retry. On a <c>401 invalid_token</c> the cached access token is dropped before the exception
+/// propagates, so the next call obtains a fresh token automatically; retrying after such a 401 is the
+/// caller's responsibility.
+/// </remarks>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
     private readonly BcsTokenManager _tokens;
@@ -22,6 +22,9 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
     private readonly BcsInstrumentsService _instruments;
     private readonly BcsMarketDataService _marketData;
     private readonly BcsOrdersService _orders;
+    private readonly BcsTradesService _trades;
+    private readonly BcsMarginalIndicatorsService _marginalIndicators;
+    private readonly BcsWebSocketConnector _webSockets;
     private readonly bool _ownsTokenManager;
     private readonly IDisposable? _ownedTransport;
     private bool _disposed;
@@ -33,7 +36,10 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsTradingScheduleService tradingSchedule,
         BcsInstrumentsService instruments,
         BcsMarketDataService marketData,
-        BcsOrdersService orders)
+        BcsOrdersService orders,
+        BcsTradesService trades,
+        BcsMarginalIndicatorsService marginalIndicators,
+        BcsWebSocketConnector webSockets)
         : this(
             tokens,
             limits,
@@ -42,6 +48,9 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
             instruments,
             marketData,
             orders,
+            trades,
+            marginalIndicators,
+            webSockets,
             ownsTokenManager: false,
             ownedTransport: null)
     {
@@ -55,6 +64,9 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         BcsInstrumentsService instruments,
         BcsMarketDataService marketData,
         BcsOrdersService orders,
+        BcsTradesService trades,
+        BcsMarginalIndicatorsService marginalIndicators,
+        BcsWebSocketConnector webSockets,
         bool ownsTokenManager,
         IDisposable? ownedTransport)
     {
@@ -65,131 +77,48 @@ public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
         _instruments = instruments ?? throw new ArgumentNullException(nameof(instruments));
         _marketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
         _orders = orders ?? throw new ArgumentNullException(nameof(orders));
+        _trades = trades ?? throw new ArgumentNullException(nameof(trades));
+        _marginalIndicators = marginalIndicators ?? throw new ArgumentNullException(nameof(marginalIndicators));
+        _webSockets = webSockets ?? throw new ArgumentNullException(nameof(webSockets));
         _ownsTokenManager = ownsTokenManager;
         _ownedTransport = ownedTransport;
     }
 
-    public Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _limits.GetLimitsAsync(cancellationToken);
-    }
+    /// <summary>Limits endpoint.</summary>
+    public IBcsLimitsApi Limits => NotDisposed(_limits);
 
-    public Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _portfolio.GetPortfolioAsync(cancellationToken);
-    }
+    /// <summary>Portfolio endpoint.</summary>
+    public IBcsPortfolioApi Portfolio => NotDisposed(_portfolio);
 
-    public Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
-        string classCode,
-        string ticker,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _tradingSchedule.GetDailyTradingScheduleAsync(classCode, ticker, cancellationToken);
-    }
+    /// <summary>Trading schedule endpoints.</summary>
+    public IBcsTradingScheduleApi TradingSchedule => NotDisposed(_tradingSchedule);
 
-    public Task<BcsTradingScheduleStatusResponse> GetTradingScheduleStatusAsync(
-        string classCode,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _tradingSchedule.GetTradingScheduleStatusAsync(classCode, cancellationToken);
-    }
+    /// <summary>Instruments endpoints.</summary>
+    public IBcsInstrumentsApi Instruments => NotDisposed(_instruments);
 
-    public Task<BcsCandlesResponse> GetCandlesAsync(
-        string classCode,
-        string ticker,
-        DateTimeOffset startDate,
-        DateTimeOffset endDate,
-        BcsCandleTimeFrames timeFrame,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _marketData.GetCandlesAsync(
-            classCode,
-            ticker,
-            startDate,
-            endDate,
-            timeFrame,
-            cancellationToken);
-    }
+    /// <summary>Market data endpoints.</summary>
+    public IBcsMarketDataApi MarketData => NotDisposed(_marketData);
 
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
-        IEnumerable<string> isins,
-        int page,
-        int size,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByIsinsAsync(isins, page, size, cancellationToken);
-    }
+    /// <summary>Orders endpoints.</summary>
+    public IBcsOrdersApi Orders => NotDisposed(_orders);
 
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
-        IEnumerable<string> tickers,
-        int page,
-        int size,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTickersAsync(tickers, page, size, cancellationToken);
-    }
+    /// <summary>Trades endpoints.</summary>
+    public IBcsTradesApi Trades => NotDisposed(_trades);
 
-    public Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
-        BcsInstrumentTypes type,
-        int page,
-        int size,
-        string? baseAssetTicker = null,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _instruments.GetInstrumentsByTypeAsync(type, page, size, baseAssetTicker, cancellationToken);
-    }
+    /// <summary>Marginal indicators endpoint.</summary>
+    public IBcsMarginalIndicatorsApi MarginalIndicators => NotDisposed(_marginalIndicators);
 
-    public Task<BcsOrdersSearchResponse> SearchOrdersAsync(
-        BcsOrdersSearchRequest request,
-        int page,
-        int size,
-        IEnumerable<BcsOrderSort>? sort = null,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _orders.SearchOrdersAsync(request, page, size, sort, cancellationToken);
-    }
+    /// <summary>
+    /// WebSocket connector for BCS streaming endpoints (see <see cref="BcsWebSocketEndpoints"/> for known URLs).
+    /// Keep-alive ping/pong is configured from <see cref="BcsInvestApiSettings"/>; the caller owns disposal and
+    /// the rest of the lifecycle (reconnect, backoff) and must keep receiving so the server's pings are answered.
+    /// </summary>
+    public BcsWebSocketConnector WebSockets => NotDisposed(_webSockets);
 
-    public Task<BcsCreateOrderResponse> CreateOrderAsync(
-        BcsCreateOrderRequest request,
-        CancellationToken cancellationToken = default)
+    private T NotDisposed<T>(T api)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return _orders.CreateOrderAsync(request, cancellationToken);
-    }
-
-    public Task<BcsOrderStatusResponse> GetOrderStatusAsync(
-        Guid clientOrderId,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _orders.GetOrderStatusAsync(clientOrderId, cancellationToken);
-    }
-
-    public Task<BcsCancelOrderResponse> CancelOrderAsync(
-        Guid originalClientOrderId,
-        Guid clientOrderId,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _orders.CancelOrderAsync(originalClientOrderId, clientOrderId, cancellationToken);
-    }
-
-    public Task<BcsUpdateOrderResponse> UpdateOrderAsync(
-        Guid originalClientOrderId,
-        BcsUpdateOrderRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return _orders.UpdateOrderAsync(originalClientOrderId, request, cancellationToken);
+        return api;
     }
 
     public void Dispose()

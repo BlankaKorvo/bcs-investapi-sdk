@@ -2,7 +2,7 @@ namespace Bcs.InvestApi.Contracts.Orders;
 
 public sealed record BcsOrderStatusResponse
 {
-    public Guid? ClientOrderId { get; init; }
+    public string? ClientOrderId { get; init; }
 
     public string? OriginalClientOrderId { get; init; }
 
@@ -47,6 +47,8 @@ public sealed record BcsOrderStatusData
 
     public DateTimeOffset? TransactionTime { get; init; }
 
+    public DateOnly? TradeDate { get; init; }
+
     public string? OrderNumber { get; init; }
 
     public decimal? AccruedCoupon { get; init; }
@@ -56,4 +58,6 @@ public sealed record BcsOrderStatusData
     public decimal? Commission { get; init; }
 
     public string? SecurityExchange { get; init; }
+
+    public string? RejectReason { get; init; }
 }

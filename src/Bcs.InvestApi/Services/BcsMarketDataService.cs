@@ -7,7 +7,7 @@ using Bcs.InvestApi.Contracts.MarketData;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsMarketDataService
+internal sealed class BcsMarketDataService : IBcsMarketDataApi
 {
     private readonly Uri _candlesUrl;
     private readonly BcsApiRequestExecutor _executor;
@@ -41,7 +41,7 @@ internal sealed class BcsMarketDataService
         _candlesUrl = settings.CreateEndpointUrl(BcsEndpointPaths.MarketData.Candles);
     }
 
-    internal Task<BcsCandlesResponse> GetCandlesAsync(
+    public Task<BcsCandlesResponse> GetCandlesAsync(
         string classCode,
         string ticker,
         DateTimeOffset startDate,

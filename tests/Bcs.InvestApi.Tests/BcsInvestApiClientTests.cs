@@ -16,9 +16,17 @@ public sealed class BcsInvestApiClientTests
         var publicConstructors = typeof(BcsInvestApiClient)
             .GetConstructors(BindingFlags.Instance | BindingFlags.Public);
 
-        Assert.Empty(publicProperties);
+        var forbiddenPropertyTypes = new[]
+        {
+            typeof(BcsAuthService),
+            typeof(BcsTokenManager),
+            typeof(IBcsAccessTokenProvider),
+            typeof(BcsTokenSet),
+        };
+
+        Assert.NotEmpty(publicProperties);
         Assert.Null(typeof(BcsInvestApiClient).GetProperty("Auth", BindingFlags.Instance | BindingFlags.Public));
-        Assert.DoesNotContain(publicProperties, property => property.PropertyType == typeof(BcsAuthService));
+        Assert.DoesNotContain(publicProperties, property => forbiddenPropertyTypes.Contains(property.PropertyType));
         Assert.DoesNotContain(
             publicConstructors,
             constructor => constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(BcsAuthService)));

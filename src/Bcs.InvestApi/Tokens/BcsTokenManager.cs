@@ -117,19 +117,79 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
     private async ValueTask<BcsTokenSet> RefreshCoreAsync(CancellationToken cancellationToken)
     {
         var resolvedRefreshToken = ResolveRefreshTokenForRefresh(_timeProvider.GetUtcNow());
+        var source = ToPublicSource(resolvedRefreshToken.Source);
 
         try
         {
-            return await ExchangeRefreshTokenAsync(resolvedRefreshToken.RefreshToken, cancellationToken).ConfigureAwait(false);
+            var tokenSet = await ExchangeRefreshTokenAsync(resolvedRefreshToken.RefreshToken, cancellationToken).ConfigureAwait(false);
+            RaiseTokenRefreshed(tokenSet, source);
+            return tokenSet;
         }
-        catch (BcsAuthException ex) when (
-            resolvedRefreshToken.Source == RefreshTokenSource.CurrentTokenSet &&
-            IsInvalidGrant(ex))
+        catch (Exception ex)
         {
-            Volatile.Write(ref _currentTokenSet, null);
+            if (ex is BcsAuthException authException &&
+                resolvedRefreshToken.Source == RefreshTokenSource.CurrentTokenSet &&
+                IsInvalidGrant(authException))
+            {
+                Volatile.Write(ref _currentTokenSet, null);
+            }
+
+            RaiseTokenRefreshFailed(ex, source);
             throw;
         }
     }
+
+    private void RaiseTokenRefreshed(BcsTokenSet tokenSet, BcsRefreshTokenSource source)
+    {
+        var callback = _settings.OnTokenRefreshed;
+        if (callback is null)
+        {
+            return;
+        }
+
+        try
+        {
+            callback(new BcsTokenRefreshInfo
+            {
+                Source = source,
+                ReceivedAtUtc = tokenSet.ReceivedAtUtc,
+                AccessTokenExpiresAtUtc = tokenSet.AccessTokenExpiresAtUtc,
+                RefreshTokenExpiresAtUtc = tokenSet.RefreshTokenExpiresAtUtc,
+                Scope = tokenSet.Scope,
+            });
+        }
+        catch
+        {
+            // Diagnostics callbacks must never break the auth flow.
+        }
+    }
+
+    private void RaiseTokenRefreshFailed(Exception exception, BcsRefreshTokenSource source)
+    {
+        var callback = _settings.OnTokenRefreshFailed;
+        if (callback is null)
+        {
+            return;
+        }
+
+        try
+        {
+            callback(new BcsTokenRefreshFailure
+            {
+                Source = source,
+                Exception = exception,
+            });
+        }
+        catch
+        {
+            // Diagnostics callbacks must never break the auth flow.
+        }
+    }
+
+    private static BcsRefreshTokenSource ToPublicSource(RefreshTokenSource source) =>
+        source == RefreshTokenSource.CurrentTokenSet
+            ? BcsRefreshTokenSource.Rotated
+            : BcsRefreshTokenSource.Bootstrap;
 
     private async ValueTask<BcsTokenSet> ExchangeRefreshTokenAsync(
         string refreshToken,

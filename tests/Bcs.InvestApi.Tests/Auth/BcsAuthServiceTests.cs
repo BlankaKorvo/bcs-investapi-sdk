@@ -43,7 +43,7 @@ public sealed class BcsAuthServiceTests
         };
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            new BcsAuthService(
+            BcsAuthService.ForSharedClient(
                 new HttpClient(new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, ValidAuthResponseJson())))),
                 settings));
 
@@ -289,7 +289,7 @@ public sealed class BcsAuthServiceTests
             AuthUrl = new Uri("https://example.test/token"),
         };
 
-        var service = new BcsAuthService(new HttpClient(handler), settings);
+        var service = BcsAuthService.ForSharedClient(new HttpClient(handler), settings);
 
         await service.GetAccessTokenAsync(new BcsAuthRequest
         {
@@ -316,7 +316,7 @@ public sealed class BcsAuthServiceTests
 
         configureSettings?.Invoke(settings);
 
-        return new BcsAuthService(new HttpClient(handler), settings);
+        return BcsAuthService.ForSharedClient(new HttpClient(handler), settings);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

@@ -252,7 +252,7 @@ public sealed class BcsApiExceptionTests
         BcsInvestApiSettings settings,
         HttpClient httpClient)
     {
-        var auth = new BcsAuthService(httpClient, settings);
+        var auth = BcsAuthService.ForSharedClient(httpClient, settings);
         return new BcsTokenManager(
             auth,
             settings,

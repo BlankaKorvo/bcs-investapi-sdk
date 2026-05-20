@@ -15,37 +15,34 @@ internal sealed class BcsAuthService
     private readonly IBcsHttpSender _requestSender;
     private readonly BcsInvestApiSettings _settings;
 
-    internal BcsAuthService(HttpClient httpClient, BcsInvestApiSettings settings)
-        : this(() => httpClient, settings, disposeHttpClientAfterRequest: false)
-    {
-    }
-
-    internal BcsAuthService(Func<HttpClient> httpClientFactory, BcsInvestApiSettings settings)
-        : this(httpClientFactory, settings, disposeHttpClientAfterRequest: true)
-    {
-    }
-
-    internal BcsAuthService(
+    /// <summary>
+    /// Creates a service over a shared <see cref="HttpClient"/> owned by the caller;
+    /// the client is not disposed after each request.
+    /// </summary>
+    internal static BcsAuthService ForSharedClient(
         HttpClient httpClient,
         BcsInvestApiSettings settings,
-        IBcsHttpSender requestSender)
-        : this(() => httpClient, settings, disposeHttpClientAfterRequest: false, requestSender)
+        IBcsHttpSender? requestSender = null)
     {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        return new BcsAuthService(() => httpClient, settings, disposeHttpClientAfterRequest: false, requestSender);
     }
 
-    internal BcsAuthService(
+    /// <summary>
+    /// Creates a service over an <see cref="System.Net.Http.IHttpClientFactory"/>-style factory;
+    /// each request gets a fresh pooled <see cref="HttpClient"/> that is disposed afterwards.
+    /// </summary>
+    internal static BcsAuthService ForPooledFactory(
         Func<HttpClient> httpClientFactory,
         BcsInvestApiSettings settings,
-        IBcsHttpSender requestSender)
-        : this(httpClientFactory, settings, disposeHttpClientAfterRequest: true, requestSender)
-    {
-    }
+        IBcsHttpSender? requestSender = null) =>
+        new(httpClientFactory, settings, disposeHttpClientAfterRequest: true, requestSender);
 
     private BcsAuthService(
         Func<HttpClient> httpClientFactory,
         BcsInvestApiSettings settings,
         bool disposeHttpClientAfterRequest,
-        IBcsHttpSender? requestSender = null)
+        IBcsHttpSender? requestSender)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));

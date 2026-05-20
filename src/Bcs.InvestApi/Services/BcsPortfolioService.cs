@@ -5,7 +5,7 @@ using Bcs.InvestApi.Contracts.Portfolio;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsPortfolioService
+internal sealed class BcsPortfolioService : IBcsPortfolioApi
 {
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _portfolioUrl;
@@ -39,7 +39,7 @@ internal sealed class BcsPortfolioService
         _portfolioUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Portfolio);
     }
 
-    internal async Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<BcsPortfolioItem>> GetPortfolioAsync(CancellationToken cancellationToken = default) =>
         await _executor
             .SendJsonAsync<List<BcsPortfolioItem>>(CreateRequestMessage, "portfolio", cancellationToken)
             .ConfigureAwait(false);

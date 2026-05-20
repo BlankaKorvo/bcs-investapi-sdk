@@ -8,6 +8,8 @@ internal static class BcsEndpointPaths
     private const string MarketDataService = "trade-api-market-data-connector/api/v1";
     private const string OrderDetailsService = "trade-api-bff-order-details/api/v1";
     private const string OrderOperationsService = "trade-api-bff-operations/api/v1";
+    private const string TradeDetailsService = "trade-api-bff-trade-details/api/v1";
+    private const string MarginalIndicatorsService = "trade-api-bff-marginal-indicators/api/v1";
 
     internal const string Limits = LimitService + "/limits";
     internal const string Portfolio = PortfolioService + "/portfolio";
@@ -36,5 +38,15 @@ internal static class BcsEndpointPaths
         internal const string Create = OrderOperationsService + "/orders";
         internal const string Search = OrderDetailsService + "/orders/search";
         internal const string OperationsRoot = OrderOperationsService + "/orders";
+    }
+
+    internal static class Trades
+    {
+        internal const string Search = TradeDetailsService + "/trades/search";
+    }
+
+    internal static class MarginalIndicators
+    {
+        internal const string InstrumentsDiscounts = MarginalIndicatorsService + "/instruments-discounts";
     }
 }

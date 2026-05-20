@@ -2,7 +2,7 @@ namespace Bcs.InvestApi;
 
 internal static class BcsInvestApiHttpClientConfiguration
 {
-    internal static void ConfigureAuthHttpClient(BcsInvestApiSettings settings, HttpClient httpClient)
+    internal static void ConfigureHttpClient(BcsInvestApiSettings settings, HttpClient httpClient)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);

@@ -332,8 +332,6 @@ public sealed class BcsInstrumentsServiceTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    [InlineData(101)]
-    [InlineData(int.MaxValue)]
     public async Task GetInstrumentsByTickersAsync_WithInvalidSize_Throws(int size)
     {
         var service = CreateService();
@@ -405,8 +403,6 @@ public sealed class BcsInstrumentsServiceTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    [InlineData(101)]
-    [InlineData(int.MaxValue)]
     public async Task GetInstrumentsByIsinsAsync_WithInvalidSize_Throws(int size)
     {
         var service = CreateService();
@@ -418,8 +414,6 @@ public sealed class BcsInstrumentsServiceTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    [InlineData(101)]
-    [InlineData(int.MaxValue)]
     public async Task GetInstrumentsByTypeAsync_WithInvalidSize_Throws(int size)
     {
         var service = CreateService();

@@ -5,7 +5,7 @@ using Bcs.InvestApi.Contracts.TradingSchedule;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsTradingScheduleService
+internal sealed class BcsTradingScheduleService : IBcsTradingScheduleApi
 {
     private readonly Uri _dailyScheduleUrl;
     private readonly Uri _statusUrl;
@@ -41,7 +41,7 @@ internal sealed class BcsTradingScheduleService
         _statusUrl = settings.CreateEndpointUrl(BcsEndpointPaths.TradingSchedule.Status);
     }
 
-    internal Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
+    public Task<BcsDailyTradingScheduleResponse> GetDailyTradingScheduleAsync(
         string classCode,
         string ticker,
         CancellationToken cancellationToken = default)
@@ -55,7 +55,7 @@ internal sealed class BcsTradingScheduleService
             cancellationToken);
     }
 
-    internal Task<BcsTradingScheduleStatusResponse> GetTradingScheduleStatusAsync(
+    public Task<BcsTradingScheduleStatusResponse> GetTradingScheduleStatusAsync(
         string classCode,
         CancellationToken cancellationToken = default)
     {

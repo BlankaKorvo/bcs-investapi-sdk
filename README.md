@@ -44,20 +44,49 @@ net10.0
 
 ## Endpoint Catalog
 
+Endpoints are grouped by domain on the client (e.g. `client.Orders.CreateOrderAsync(...)`).
+
 | Method | BCS endpoint |
 |---|---|
-| `GetLimitsAsync` | `GET /trade-api-bff-limit/api/v1/limits` |
-| `GetPortfolioAsync` | `GET /trade-api-bff-portfolio/api/v1/portfolio` |
-| `GetDailyTradingScheduleAsync` | `GET /trade-api-information-service/api/v1/trading-schedule/daily-schedule` |
-| `GetInstrumentsByIsinsAsync` | `POST /trade-api-information-service/api/v1/instruments/by-isins` |
-| `GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
-| `GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
-| `GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
-| `CreateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders` |
-| `GetOrderStatusAsync` | `GET /trade-api-bff-operations/api/v1/orders/{clientOrderId}` |
-| `SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
-| `UpdateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
-| `CancelOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}/cancel` |
+| `Limits.GetLimitsAsync` | `GET /trade-api-bff-limit/api/v1/limits` |
+| `Portfolio.GetPortfolioAsync` | `GET /trade-api-bff-portfolio/api/v1/portfolio` |
+| `TradingSchedule.GetDailyTradingScheduleAsync` | `GET /trade-api-information-service/api/v1/trading-schedule/daily-schedule` |
+| `Instruments.GetInstrumentsByIsinsAsync` | `POST /trade-api-information-service/api/v1/instruments/by-isins` |
+| `Instruments.GetInstrumentsByTickersAsync` | `POST /trade-api-information-service/api/v1/instruments/by-tickers` |
+| `Instruments.GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
+| `MarketData.GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
+| `Orders.CreateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders` |
+| `Orders.GetOrderStatusAsync` | `GET /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
+| `Orders.SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
+| `Orders.UpdateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
+| `Orders.CancelOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}/cancel` |
+| `Trades.SearchTradesAsync` | `POST /trade-api-bff-trade-details/api/v1/trades/search` |
+| `MarginalIndicators.GetInstrumentsDiscountsAsync` | `GET /trade-api-bff-marginal-indicators/api/v1/instruments-discounts` |
+
+## WebSocket Streams
+
+The SDK provides authenticated WebSocket connection plumbing only. Connection lifecycle — reconnect,
+backoff, ping/pong, multiplexing, and message dispatch — belongs to the application layer (see
+[ARCHITECTURE.md](ARCHITECTURE.md) scope matrix).
+
+- `WebSockets.ConnectAsync(Uri url, CancellationToken)` opens an authenticated `ClientWebSocket` (fresh Bearer token per call).
+- `BcsWebSocketEndpoints` exposes known stream URLs (e.g. `BcsWebSocketEndpoints.Limits`).
+- `WebSocket.ReceiveJsonMessageAsync<T>(...)` reads one logical message and deserializes with the SDK's JSON options.
+- Stream payloads reuse the HTTP contract types (e.g. the limits stream yields `BcsLimitsResponse`).
+
+```csharp
+using var ws = await client.WebSockets.ConnectAsync(BcsWebSocketEndpoints.Limits, ct);
+while (ws.State == WebSocketState.Open)
+{
+    var snapshot = await ws.ReceiveJsonMessageAsync<BcsLimitsResponse>(ct);
+    if (snapshot is null)
+    {
+        break; // server closed cleanly
+    }
+
+    Handle(snapshot);
+}
+```
 
 ## Auth Endpoint
 
@@ -121,7 +150,7 @@ await using var client = BcsInvestApiClientFactory.Create(
     refreshToken: refreshToken,
     clientId: BcsAuthClientIds.TradeApiRead);
 
-var limits = await client.GetLimitsAsync();
+var limits = await client.Limits.GetLimitsAsync();
 ```
 
 The following calls are independent direct endpoint examples, not an orchestration flow:
@@ -130,27 +159,27 @@ The following calls are independent direct endpoint examples, not an orchestrati
 using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Orders;
 
-var portfolio = await client.GetPortfolioAsync();
-var schedule = await client.GetDailyTradingScheduleAsync("TQBR", "SBER");
-var instruments = await client.GetInstrumentsByIsinsAsync(
+var portfolio = await client.Portfolio.GetPortfolioAsync();
+var schedule = await client.TradingSchedule.GetDailyTradingScheduleAsync("TQBR", "SBER");
+var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
     new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
     page: 0,
     size: 50);
-var instrumentsByTicker = await client.GetInstrumentsByTickersAsync(
+var instrumentsByTicker = await client.Instruments.GetInstrumentsByTickersAsync(
     new[] { "SBER", "GAZP", "ROSN" },
     page: 0,
     size: 50);
-var stocks = await client.GetInstrumentsByTypeAsync(
+var stocks = await client.Instruments.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Stock,
     page: 0,
     size: 50);
-var candles = await client.GetCandlesAsync(
+var candles = await client.MarketData.GetCandlesAsync(
     "TQBR",
     "SBER",
     new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
     new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
     BcsCandleTimeFrames.Hour1);
-var orders = await client.SearchOrdersAsync(
+var orders = await client.Orders.SearchOrdersAsync(
     new BcsOrdersSearchRequest
     {
         StartDateTime = DateTimeOffset.UtcNow.AddDays(-7),
@@ -160,9 +189,9 @@ var orders = await client.SearchOrdersAsync(
     page: 0,
     size: 50,
     sort: new[] { BcsOrderSort.OrderDateTimeDesc });
-var orderStatus = await client.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+var orderStatus = await client.Orders.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
 
-var updateResult = await client.UpdateOrderAsync(
+var updateResult = await client.Orders.UpdateOrderAsync(
     originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     request: new BcsUpdateOrderRequest
     {
@@ -171,7 +200,7 @@ var updateResult = await client.UpdateOrderAsync(
         Price = 9.540m,
     });
 
-var cancelResult = await client.CancelOrderAsync(
+var cancelResult = await client.Orders.CancelOrderAsync(
     originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     clientOrderId: Guid.NewGuid());
 ```
@@ -201,7 +230,7 @@ SDK requests exactly one page. Instrument lookup and order search methods perfor
 max limits.
 
 ```csharp
-var instruments = await client.GetInstrumentsByIsinsAsync(
+var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
     new[] { "RU0009029540", "RU0007661625", "RU000A0J2Q06" },
     page: 0,
     size: 50);
@@ -211,7 +240,7 @@ When the BCS endpoint needs a base asset ticker, pass `baseAssetTicker`; the SDK
 provided.
 
 ```csharp
-var sberOptions = await client.GetInstrumentsByTypeAsync(
+var sberOptions = await client.Instruments.GetInstrumentsByTypeAsync(
     BcsInstrumentTypes.Options,
     page: 0,
     size: 50,
@@ -220,12 +249,12 @@ var sberOptions = await client.GetInstrumentsByTypeAsync(
 
 ## Historical Candles
 
-`GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
+`MarketData.GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
 
 ```csharp
 using Bcs.InvestApi.Contracts.Enums;
 
-var candles = await client.GetCandlesAsync(
+var candles = await client.MarketData.GetCandlesAsync(
     classCode: "TQBR",
     ticker: "SBER",
     startDate: new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
@@ -289,7 +318,7 @@ using Bcs.InvestApi.Contracts.Exceptions;
 
 try
 {
-    var limits = await client.GetLimitsAsync();
+    var limits = await client.Limits.GetLimitsAsync();
 }
 catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 {

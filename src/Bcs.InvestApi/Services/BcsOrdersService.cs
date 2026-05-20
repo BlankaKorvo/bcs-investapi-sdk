@@ -10,7 +10,7 @@ using Bcs.InvestApi.Contracts.Orders;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsOrdersService
+internal sealed class BcsOrdersService : IBcsOrdersApi
 {
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _ordersCreateUrl;
@@ -48,7 +48,7 @@ internal sealed class BcsOrdersService
         _orderOperationsRootUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Orders.OperationsRoot);
     }
 
-    internal Task<BcsCreateOrderResponse> CreateOrderAsync(
+    public Task<BcsCreateOrderResponse> CreateOrderAsync(
         BcsCreateOrderRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -74,19 +74,19 @@ internal sealed class BcsOrdersService
             cancellationToken);
     }
 
-    internal Task<BcsOrderStatusResponse> GetOrderStatusAsync(
-        Guid clientOrderId,
+    public Task<BcsOrderStatusResponse> GetOrderStatusAsync(
+        Guid originalClientOrderId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequiredGuid(clientOrderId, nameof(clientOrderId));
+        ValidateRequiredGuid(originalClientOrderId, nameof(originalClientOrderId));
 
         return _executor.SendJsonAsync<BcsOrderStatusResponse>(
-            accessToken => CreateGetOrderStatusRequestMessage(accessToken, clientOrderId),
+            accessToken => CreateGetOrderStatusRequestMessage(accessToken, originalClientOrderId),
             "order-status",
             cancellationToken);
     }
 
-    internal Task<BcsOrdersSearchResponse> SearchOrdersAsync(
+    public Task<BcsOrdersSearchResponse> SearchOrdersAsync(
         BcsOrdersSearchRequest request,
         int page,
         int size,
@@ -106,7 +106,7 @@ internal sealed class BcsOrdersService
             cancellationToken);
     }
 
-    internal Task<BcsCancelOrderResponse> CancelOrderAsync(
+    public Task<BcsCancelOrderResponse> CancelOrderAsync(
         Guid originalClientOrderId,
         Guid clientOrderId,
         CancellationToken cancellationToken = default)
@@ -120,7 +120,7 @@ internal sealed class BcsOrdersService
             cancellationToken);
     }
 
-    internal Task<BcsUpdateOrderResponse> UpdateOrderAsync(
+    public Task<BcsUpdateOrderResponse> UpdateOrderAsync(
         Guid originalClientOrderId,
         BcsUpdateOrderRequest request,
         CancellationToken cancellationToken = default)
@@ -176,9 +176,9 @@ internal sealed class BcsOrdersService
 
     private HttpRequestMessage CreateGetOrderStatusRequestMessage(
         string accessToken,
-        Guid clientOrderId)
+        Guid originalClientOrderId)
     {
-        return new HttpRequestMessage(HttpMethod.Get, CreateGetOrderStatusUrl(clientOrderId))
+        return new HttpRequestMessage(HttpMethod.Get, CreateGetOrderStatusUrl(originalClientOrderId))
             .WithBearer(accessToken)
             .AcceptJson();
     }
@@ -251,7 +251,7 @@ internal sealed class BcsOrdersService
     private Uri CreateCancelOrderUrl(Guid originalClientOrderId)
     {
         var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
-        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), $"{originalClientOrderIdValue}/cancel");
+        return new Uri(BcsUri.EnsureTrailingSlash(_orderOperationsRootUrl), $"{originalClientOrderIdValue}/cancel");
     }
 
     private HttpRequestMessage CreateUpdateOrderRequestMessage(
@@ -276,13 +276,13 @@ internal sealed class BcsOrdersService
     private Uri CreateUpdateOrderUrl(Guid originalClientOrderId)
     {
         var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
-        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), originalClientOrderIdValue);
+        return new Uri(BcsUri.EnsureTrailingSlash(_orderOperationsRootUrl), originalClientOrderIdValue);
     }
 
-    private Uri CreateGetOrderStatusUrl(Guid clientOrderId)
+    private Uri CreateGetOrderStatusUrl(Guid originalClientOrderId)
     {
-        var clientOrderIdValue = Uri.EscapeDataString(clientOrderId.ToString("D"));
-        return new Uri(EnsureTrailingSlash(_orderOperationsRootUrl), clientOrderIdValue);
+        var originalClientOrderIdValue = Uri.EscapeDataString(originalClientOrderId.ToString("D"));
+        return new Uri(BcsUri.EnsureTrailingSlash(_orderOperationsRootUrl), originalClientOrderIdValue);
     }
 
     private static IReadOnlyList<int>? ToApiValues(IReadOnlyList<BcsOrderStatus>? values) =>
@@ -341,16 +341,6 @@ internal sealed class BcsOrdersService
     private static string FormatBodyDateTime(DateTimeOffset value) =>
         value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
-    private static Uri EnsureTrailingSlash(Uri uri)
-    {
-        if (uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal))
-        {
-            return uri;
-        }
-
-        return new Uri(uri.AbsoluteUri + "/");
-    }
-
     private sealed record BcsOrdersSearchRequestBody
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -382,12 +372,14 @@ internal sealed class BcsOrdersService
         long OrderQuantity,
         string Ticker,
         string ClassCode,
-        decimal Price);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        decimal? Price);
 
     private sealed record BcsCancelOrderRequestBody(Guid ClientOrderId);
 
     private sealed record BcsUpdateOrderRequestBody(
         Guid ClientOrderId,
-        decimal Price,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        decimal? Price,
         long OrderQuantity);
 }

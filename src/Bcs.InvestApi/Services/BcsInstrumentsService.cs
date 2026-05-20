@@ -9,7 +9,7 @@ using Bcs.InvestApi.Contracts.Instruments;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsInstrumentsService
+internal sealed class BcsInstrumentsService : IBcsInstrumentsApi
 {
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _instrumentsByIsinsUrl;
@@ -47,7 +47,7 @@ internal sealed class BcsInstrumentsService
         _instrumentsByTypeUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Instruments.ByType);
     }
 
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
+    public async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByIsinsAsync(
         IEnumerable<string> isins,
         int page,
         int size,
@@ -67,7 +67,7 @@ internal sealed class BcsInstrumentsService
             .ConfigureAwait(false);
     }
 
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
+    public async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTickersAsync(
         IEnumerable<string> tickers,
         int page,
         int size,
@@ -87,7 +87,7 @@ internal sealed class BcsInstrumentsService
             .ConfigureAwait(false);
     }
 
-    internal async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
+    public async Task<IReadOnlyList<BcsInstrument>> GetInstrumentsByTypeAsync(
         BcsInstrumentTypes type,
         int page,
         int size,
@@ -301,16 +301,14 @@ internal sealed class BcsInstrumentsService
         }
     }
 
-    private const int MaxPageSize = 100;
-
     private static void ValidateSize(int size)
     {
-        if (size is < 1 or > MaxPageSize)
+        if (size < 1)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(size),
                 size,
-                $"Page size must be between 1 and {MaxPageSize}.");
+                "Page size must be greater than or equal to one.");
         }
     }
 }

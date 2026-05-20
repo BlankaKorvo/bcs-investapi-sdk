@@ -5,7 +5,7 @@ using Bcs.InvestApi.Contracts.Limits;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Tokens;
 
-internal sealed class BcsLimitsService
+internal sealed class BcsLimitsService : IBcsLimitsApi
 {
     private readonly BcsApiRequestExecutor _executor;
     private readonly Uri _limitsUrl;
@@ -39,7 +39,7 @@ internal sealed class BcsLimitsService
         _limitsUrl = settings.CreateEndpointUrl(BcsEndpointPaths.Limits);
     }
 
-    internal Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default) =>
+    public Task<BcsLimitsResponse> GetLimitsAsync(CancellationToken cancellationToken = default) =>
         _executor.SendJsonAsync<BcsLimitsResponse>(CreateRequestMessage, "limits", cancellationToken);
 
     private HttpRequestMessage CreateRequestMessage(string accessToken) =>

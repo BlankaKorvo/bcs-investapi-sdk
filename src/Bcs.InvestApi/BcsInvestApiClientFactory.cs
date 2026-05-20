@@ -32,12 +32,13 @@ public static class BcsInvestApiClientFactory
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateRefreshToken();
         settings.ValidateTokenTimings();
+        settings.ValidateWebSocketKeepAlive();
 
         var httpClient = httpMessageHandler is null
             ? new HttpClient()
             : new HttpClient(httpMessageHandler, disposeHandler: false);
 
-        BcsInvestApiHttpClientConfiguration.ConfigureAuthHttpClient(settings, httpClient);
+        BcsInvestApiHttpClientConfiguration.ConfigureHttpClient(settings, httpClient);
 
         var services = BcsInvestApiClientServices.Create(
             settings,
