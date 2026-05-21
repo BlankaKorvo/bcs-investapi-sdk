@@ -130,6 +130,35 @@ public static class BcsWebSocketExtensions
         }
     }
 
+    /// <summary>
+    /// Streams logical messages from the WebSocket as an <see cref="IAsyncEnumerable{T}"/>, deserializing each
+    /// with the SDK's JSON options. Enumeration ends when the server closes the connection cleanly
+    /// (<see cref="ReceiveJsonMessageAsync{T}"/> returns <c>null</c>) or when <paramref name="cancellationToken"/>
+    /// is cancelled. The SDK provides receive plumbing only: reconnect, ack/error filtering and dispatch
+    /// remain the caller's responsibility.
+    /// </summary>
+    public static async IAsyncEnumerable<T> ReceiveJsonMessagesAsync<T>(
+        this WebSocket webSocket,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(webSocket);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var message = await webSocket
+                .ReceiveJsonMessageAsync<T>(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (message is null)
+            {
+                yield break;
+            }
+
+            yield return message;
+        }
+    }
+
     private static byte[] GrowBuffer(byte[] current, int written)
     {
         var bigger = ArrayPool<byte>.Shared.Rent(current.Length * 2);

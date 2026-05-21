@@ -58,6 +58,35 @@ public sealed class BcsWebSocketConnector
         }
     }
 
+    /// <summary>
+    /// Opens an authenticated connection to <paramref name="url"/> and sends <paramref name="subscribeMessage"/>
+    /// as the first (text) frame, using the SDK's JSON options. Convenience for streams that require an explicit
+    /// subscribe request (e.g. <see cref="BcsWebSocketEndpoints.MarketData"/>); push-only streams should use
+    /// <see cref="ConnectAsync"/> instead. The caller still owns the socket lifecycle: receiving, unsubscribing,
+    /// reconnect and disposal. On failure the socket is disposed before the exception propagates.
+    /// </summary>
+    public async Task<ClientWebSocket> ConnectAndSubscribeAsync<TSubscribe>(
+        Uri url,
+        TSubscribe subscribeMessage,
+        CancellationToken cancellationToken = default)
+        where TSubscribe : notnull
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        ArgumentNullException.ThrowIfNull(subscribeMessage);
+
+        var socket = await ConnectAsync(url, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await socket.SendJsonMessageAsync(subscribeMessage, cancellationToken).ConfigureAwait(false);
+            return socket;
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
+
     internal static void ConfigureKeepAlive(ClientWebSocket socket, TimeSpan interval, TimeSpan timeout)
     {
         socket.Options.KeepAliveInterval = interval;

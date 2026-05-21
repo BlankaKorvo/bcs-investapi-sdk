@@ -158,6 +158,63 @@ public sealed class BcsWebSocketExtensionsTests
     }
 
     [Fact]
+    public async Task ReceiveJsonMessagesAsync_StreamsMessagesUntilCleanClose()
+    {
+        var first = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
+        var second = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Data(first, WebSocketMessageType.Text, endOfMessage: true),
+            FakeWebSocket.Frame.Data(second, WebSocketMessageType.Text, endOfMessage: true),
+            FakeWebSocket.Frame.Close(),
+        });
+
+        var count = 0;
+        await foreach (var message in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>())
+        {
+            Assert.NotNull(message);
+            count++;
+        }
+
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task ReceiveJsonMessagesAsync_StopsWhenCancelled()
+    {
+        var payload = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Data(payload, WebSocketMessageType.Text, endOfMessage: true),
+            FakeWebSocket.Frame.Close(),
+        });
+        using var cts = new CancellationTokenSource();
+
+        var count = 0;
+        await foreach (var message in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>(cts.Token))
+        {
+            Assert.NotNull(message);
+            count++;
+            cts.Cancel();
+        }
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task ReceiveJsonMessagesAsync_NullWebSocket_Throws()
+    {
+        WebSocket? socket = null;
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await foreach (var _ in socket!.ReceiveJsonMessagesAsync<BcsLimitsResponse>())
+            {
+            }
+        });
+    }
+
+    [Fact]
     public async Task ReadAllAsync_YieldsMessagesUntilCleanClose()
     {
         var first = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");

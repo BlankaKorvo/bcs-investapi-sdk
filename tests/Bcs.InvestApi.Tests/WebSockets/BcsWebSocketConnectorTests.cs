@@ -61,6 +61,49 @@ public sealed class BcsWebSocketConnectorTests
     }
 
     [Fact]
+    public async Task ConnectAndSubscribeAsync_NullUri_Throws()
+    {
+        var connector = new BcsWebSocketConnector(
+            new RecordingTokenProvider("access-token-1"),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(20));
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            connector.ConnectAndSubscribeAsync(null!, new object()));
+    }
+
+    [Fact]
+    public async Task ConnectAndSubscribeAsync_NullSubscribeMessage_Throws()
+    {
+        var connector = new BcsWebSocketConnector(
+            new RecordingTokenProvider("access-token-1"),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(20));
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            connector.ConnectAndSubscribeAsync<object>(new Uri("wss://example.test/ws"), null!));
+    }
+
+    [Fact]
+    public async Task ConnectAndSubscribeAsync_FetchesAccessTokenBeforeHandshake()
+    {
+        var tokens = new RecordingTokenProvider("access-token-1");
+        var connector = new BcsWebSocketConnector(
+            tokens,
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(20));
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Delegates to ConnectAsync, which fetches the token before the cancelled handshake fails.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            connector.ConnectAndSubscribeAsync(new Uri("wss://example.test/ws"), new object(), cts.Token));
+
+        Assert.Equal(1, tokens.RequestCount);
+    }
+
+    [Fact]
     public void ConfigureKeepAlive_AppliesIntervalAndTimeoutToSocket()
     {
         using var socket = new ClientWebSocket();

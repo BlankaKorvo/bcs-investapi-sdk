@@ -71,22 +71,43 @@ backoff, ping/pong, multiplexing, and message dispatch - belongs to the applicat
 [ARCHITECTURE.md](ARCHITECTURE.md) scope matrix).
 
 - `WebSockets.ConnectAsync(Uri url, CancellationToken)` opens an authenticated `ClientWebSocket` (fresh Bearer token per call).
+- `WebSockets.ConnectAndSubscribeAsync(url, subscribeMessage, ct)` opens the socket and sends the subscribe payload as the first frame (for streams that require an explicit subscribe, e.g. market data).
+- `WebSocket.SendJsonMessageAsync(message, ct)` serializes and sends a single text frame with the SDK's JSON options (subscribe/unsubscribe payloads).
+- `WebSocket.ReceiveJsonMessageAsync<T>(ct)` reads one logical message; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` streams them as an `IAsyncEnumerable<T>` until clean close or cancellation.
 - `BcsWebSocketEndpoints` exposes known stream URLs (e.g. `BcsWebSocketEndpoints.Limits`).
-- `WebSocket.ReceiveJsonMessageAsync<T>(...)` reads one logical message and deserializes with the SDK's JSON options.
 - Stream payloads reuse the HTTP contract types (e.g. the limits stream yields `BcsLimitsResponse`).
+
+Push stream (no subscribe message required):
 
 ```csharp
 using var ws = await client.WebSockets.ConnectAsync(BcsWebSocketEndpoints.Limits, ct);
-while (ws.State == WebSocketState.Open)
+await foreach (var snapshot in ws.ReceiveJsonMessagesAsync<BcsLimitsResponse>(ct))
 {
-    var snapshot = await ws.ReceiveJsonMessageAsync<BcsLimitsResponse>(ct);
-    if (snapshot is null)
-    {
-        break; // server closed cleanly
-    }
-
-    Handle(snapshot);
+    Handle(snapshot); // enumeration ends on clean close or cancellation
 }
+```
+
+Market-data stream (connect + subscribe, then unsubscribe):
+
+```csharp
+var subscribe = new BcsMarketDataSubscribeRequest
+{
+    DataType = BcsMarketDataType.Candles,
+    TimeFrame = "M1",
+    Instruments = new[] { new BcsMarketDataInstrument { ClassCode = "TQBR", Ticker = "SBER" } },
+};
+
+using var ws = await client.WebSockets.ConnectAndSubscribeAsync(
+    BcsWebSocketEndpoints.MarketData, subscribe, ct);
+
+await foreach (var message in ws.ReceiveJsonMessagesAsync<BcsLastCandleMessage>(ct))
+{
+    if (message.Errors.Count > 0) { HandleErrors(message.Errors); break; }
+    Handle(message);
+}
+
+await ws.SendJsonMessageAsync(
+    subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe }, ct);
 ```
 
 ## Auth Endpoint
