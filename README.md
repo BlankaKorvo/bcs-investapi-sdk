@@ -1,52 +1,48 @@
 # Bcs.InvestApi
 
-Thin C# SDK for BCS Trade API.
+Компактный C# SDK для BCS Trade API.
 
-Bcs.InvestApi is a raw endpoint client: transport, contract types, and auth helper only.
+Bcs.InvestApi — это клиент прямых конечных точек: только транспорт, контрактные типы и вспомогательное средство авторизации.
 
-The SDK does not aggregate, normalize, map, paginate, trade, schedule, or interpret data. It is not an application
-layer, token daemon, trading system, portfolio model, or strategy framework.
+SDK не выполняет агрегацию, нормализацию, маппинг, пагинацию, торговлю, планирование или интерпретацию данных. Это не слой приложения, не демон токенов, не торговая система, не модель портфеля и не стратегический фреймворк.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the boundary rules this package is expected to keep.
+См. [ARCHITECTURE.md](ARCHITECTURE.md) для правил границ, которые этот пакет должен соблюдать.
 
-## Target Framework
+## Целевая платформа
 
 ```text
 net10.0
 ```
 
-## Package Shape
+## Структура пакета
 
-- `Bcs.InvestApi` contains SDK core: auth helper, in-memory token cache, HTTP transport, raw contract DTOs, and endpoint methods.
-- `Bcs.InvestApi.DependencyInjection` contains optional Microsoft.Extensions.DependencyInjection registration.
-- SDK core does not depend on `Microsoft.Extensions.*`.
+- `Bcs.InvestApi` содержит ядро SDK: вспомогательное средство авторизации, кэш токенов в памяти, HTTP-транспорт, контрактные DTO и методы конечных точек.
+- `Bcs.InvestApi.DependencyInjection` содержит необязательную регистрацию Microsoft.Extensions.DependencyInjection.
+- Ядро SDK не зависит от `Microsoft.Extensions.*`.
 
-## SDK Boundary
+## Границы SDK
 
-- Endpoint methods perform one BCS server request per call.
-- Raw endpoint contract DTOs stay raw. Callers own business logic, domain mapping, aggregation, normalization, pagination loops,
-  trading decisions, scheduling, retry policy, persistence, and operational recovery.
-- Raw endpoints stay in SDK, including portfolio, because they are direct BCS server endpoints rather than SDK-level
-  portfolio modeling.
-- No disk token persistence.
-- No automatic refresh-token retry policy around the refresh-token grant.
-- No strategy/domain models, repositories, stores, backtests, hosted services, or trading systems.
+- Методы конечных точек выполняют один запрос к серверу BCS за вызов.
+- Контрактные DTO прямых конечных точек остаются «сырыми». Бизнес-логику, маппинг домена, агрегацию, нормализацию, циклы пагинации, торговые решения, планирование, политику повторных попыток, постоянное хранение и операционное восстановление выполняет вызывающая сторона.
+- Прямые конечные точки остаются в SDK, включая портфель, поскольку это прямые конечные точки сервера BCS, а не моделирование портфеля на уровне SDK.
+- Постоянное хранение токенов на диске отсутствует.
+- Автоматическая политика повторных попыток обновления токена при выдаче обновлённого токена отсутствует.
+- Стратегические/доменные модели, репозитории, хранилища, бэктесты, Hosted Service и торговые системы отсутствуют.
 
-## Features
+## Возможности
 
-- Authorization by stable external refresh/bootstrap secret supplied by the host application.
-- Runtime access/refresh token cache in memory.
-- Lazy access-token refresh before token expiration.
-- Internal token manager that authorizes SDK HTTP requests.
-- Typed `BcsAuthException` for non-success auth responses.
-- Raw endpoint methods for limits, portfolio, trading schedule, instruments, historical candles, orders, trades, and
-  marginal instrument discounts.
+- Авторизация по стабильному внешнему секрету обновления/загрузки, предоставленному хост-приложением.
+- Кэш access/refresh токенов в памяти во время выполнения.
+- Ленивое обновление access-токена до истечения срока его действия.
+- Внутренний токен-менеджер, который авторизует HTTP-запросы SDK.
+- Типизированное исключение `BcsAuthException` для неудачных ответов авторизации.
+- Методы прямых конечных точек для лимитов, портфеля, торгового расписания, инструментов, исторических свечей, заявок, сделок и маржинальных дисконтов инструментов.
 
-## Endpoint Catalog
+## Каталог конечных точек
 
-Endpoints are grouped by domain on the client (e.g. `client.Orders.CreateOrderAsync(...)`).
+Конечные точки сгруппированы по доменам на клиенте (например, `client.Orders.CreateOrderAsync(...)`).
 
-| Method | BCS endpoint |
+| Метод | Конечная точка BCS |
 |---|---|
 | `Limits.GetLimitsAsync` | `GET /trade-api-bff-limit/api/v1/limits` |
 | `Portfolio.GetPortfolioAsync` | `GET /trade-api-bff-portfolio/api/v1/portfolio` |
@@ -64,30 +60,28 @@ Endpoints are grouped by domain on the client (e.g. `client.Orders.CreateOrderAs
 | `Trades.SearchTradesAsync` | `POST /trade-api-bff-trade-details/api/v1/trades/search` |
 | `MarginalIndicators.GetInstrumentsDiscountsAsync` | `GET /trade-api-bff-marginal-indicators/api/v1/instruments-discounts` |
 
-## WebSocket Streams
+## WebSocket-потоки
 
-The SDK provides authenticated WebSocket connection plumbing only. Connection lifecycle - reconnect,
-backoff, ping/pong, multiplexing, and message dispatch - belongs to the application layer (see
-[ARCHITECTURE.md](ARCHITECTURE.md) scope matrix).
+SDK предоставляет только инфраструкцию аутентифицированного WebSocket-соединения. Жизненный цикл соединения — переподключение, обратное давление, ping/pong, мультиплексирование и маршрутизация сообщений — принадлежит слою приложения (см. [ARCHITECTURE.md](ARCHITECTURE.md) — матрицу областей).
 
-- `WebSockets.ConnectAsync(Uri url, CancellationToken)` opens an authenticated `ClientWebSocket` (fresh Bearer token per call).
-- `WebSockets.ConnectAndSubscribeAsync(url, subscribeMessage, ct)` opens the socket and sends the subscribe payload as the first frame (for streams that require an explicit subscribe, e.g. market data).
-- `WebSocket.SendJsonMessageAsync(message, ct)` serializes and sends a single text frame with the SDK's JSON options (subscribe/unsubscribe payloads).
-- `WebSocket.ReceiveJsonMessageAsync<T>(ct)` reads one logical message; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` streams them as an `IAsyncEnumerable<T>` until clean close or cancellation.
-- `BcsWebSocketEndpoints` exposes known stream URLs (e.g. `BcsWebSocketEndpoints.Limits`).
-- Stream payloads reuse the HTTP contract types (e.g. the limits stream yields `BcsLimitsResponse`).
+- `WebSockets.ConnectAsync(Uri url, CancellationToken)` открывает аутентифицированный `ClientWebSocket` (свежий Bearer-токен при каждом вызове).
+- `WebSockets.ConnectAndSubscribeAsync(url, subscribeMessage, ct)` открывает сокет и отправляет содержимое подписки в первом кадре (для потоков, требующих явной подписки, например рыночные данные).
+- `WebSocket.SendJsonMessageAsync(message, ct)` сериализует и отправляет один текстовый кадр с JSON-параметрами SDK (содержимое подписки/отписки).
+- `WebSocket.ReceiveJsonMessageAsync<T>(ct)` считывает одно логическое сообщение; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` передаёт их как `IAsyncEnumerable<T>` до чистого закрытия или отмены.
+- `BcsWebSocketEndpoints` предоставляет известные URL потоков (например, `BcsWebSocketEndpoints.Limits`).
+- Полезные данные потоков используют контрактные типы HTTP (например, поток лимитов возвращает `BcsLimitsResponse`).
 
-Push stream (no subscribe message required):
+Пуш-поток (сообщение подписки не требуется):
 
 ```csharp
 using var ws = await client.WebSockets.ConnectAsync(BcsWebSocketEndpoints.Limits, ct);
 await foreach (var snapshot in ws.ReceiveJsonMessagesAsync<BcsLimitsResponse>(ct))
 {
-    Handle(snapshot); // enumeration ends on clean close or cancellation
+    Handle(snapshot); // перечисление завершается при чистом закрытии или отмене
 }
 ```
 
-Market-data stream (connect + subscribe, then unsubscribe):
+Поток рыночных данных (подключение + подписка, затем отписка):
 
 ```csharp
 var subscribe = new BcsMarketDataSubscribeRequest
@@ -110,54 +104,47 @@ await ws.SendJsonMessageAsync(
     subscribe with { SubscribeType = BcsMarketDataSubscribeType.Unsubscribe }, ct);
 ```
 
-## Auth Endpoint
+## Конечная точка авторизации
 
 ```text
 POST https://be.broker.ru/trade-api-keycloak/realms/tradeapi/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 ```
 
-`BcsInvestApiSettings.AuthUrl` must be an absolute HTTPS URI. Plain HTTP is rejected by default because the SDK sends
-refresh tokens to this endpoint. For local HTTP-only tests, set `AllowInsecureHttpForTesting = true` explicitly.
+`BcsInvestApiSettings.AuthUrl` должен быть абсолютным HTTPS-URI. Простой HTTP по умолчанию отвергается, поскольку SDK отправляет refresh-токены на эту конечную точку. Для локальных тестов по HTTP явно задайте `AllowInsecureHttpForTesting = true`.
 
-API endpoints are built relative to `BcsInvestApiSettings.BaseUrl`, which defaults to `https://be.broker.ru`.
+API- endpoints формируются относительно `BcsInvestApiSettings.BaseUrl`, которая по умолчанию равна `https://be.broker.ru`.
 
-Form fields:
+Поля формы:
 
-| Field | Value |
+| Поле | Значение |
 |---|---|
-| `client_id` | `trade-api-read` or `trade-api-write` |
-| `refresh_token` | current in-memory rotated refresh token when usable, otherwise the configured external refresh/bootstrap secret |
+| `client_id` | `trade-api-read` или `trade-api-write` |
+| `refresh_token` | текущий в памяти вращающийся refresh-токен при доступности, иначе настроенный внешний секрет обновления/загрузки |
 | `grant_type` | `refresh_token` |
 
-## Settings
+## Настройки
 
-| Setting | Default | Description |
-|---|---:|---|
-| `RefreshToken` | required | Stable external refresh/bootstrap secret supplied by the host/application layer. |
-| `ClientId` | `BcsAuthClientIds.TradeApiRead` | BCS auth client id enum. Values map to `trade-api-read` or `trade-api-write`. |
-| `AuthUrl` | BCS token endpoint | Full Keycloak token endpoint URL. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
-| `BaseUrl` | `https://be.broker.ru` | Base URL for BCS HTTP API endpoints. Must be absolute HTTPS unless local insecure HTTP is explicitly allowed. |
-| `AllowInsecureHttpForTesting` | `false` | Allows plain HTTP URLs only for explicit local tests. |
-| `Timeout` | `null` | Optional HTTP timeout. If `null`, the `HttpClient` default timeout is used. |
-| `TokenRefreshSkew` | `5 minutes` | Refresh access token before its actual expiration. |
-| `TokenRefreshOperationTimeout` | `60 seconds` | Maximum time allowed for one refresh-token auth exchange. |
+| Настройка | По умолчанию | Описание |
+|---|---|---|
+| `RefreshToken` | требуется | Стабильный внешний секрет обновления/загрузки, предоставленный хостом/слоем приложения. |
+| `ClientId` | `BcsAuthClientIds.TradeApiRead` | Перечисление идентификатора клиента BCS. Значения соответствуют `trade-api-read` или `trade-api-write`. |
+| `AuthUrl` | Конечная точка токена BCS | Полный URL конечной точки Keycloak. Должен быть абсолютным HTTPS, если локальный небезопасный HTTP не разрешён явно. |
+| `BaseUrl` | `https://be.broker.ru` | Базовый URL для API-ендпоинтов BCS. Должен быть абсолютным HTTPS, если локальный небезопасный HTTP не разрешён явно. |
+| `AllowInsecureHttpForTesting` | `false` | Разрешает небезопасные HTTP-URL только для явных локальных тестов. |
+| `Timeout` | `null` | Необязательный HTTP-таймаут. Если `null`, используется таймаут по умолчанию `HttpClient`. |
+| `TokenRefreshSkew` | `5 minutes` | Обновление access-токена до его фактического истечения. |
+| `TokenRefreshOperationTimeout` | `60 seconds` | Максимальное время, допустимое для одного обмена авторизации refresh-токеном. |
 
-## Authorization Behavior
+## Поведение авторизации
 
-The SDK keeps the runtime token pair in private in-memory state. The host supplies one stable external
-refresh/bootstrap secret through `BcsInvestApiSettings.RefreshToken` or `BcsInvestApiClientFactory.Create(...)`.
+SDK хранит пару runtime-токенов в частном состоянии в памяти. Хост предоставляет один стабильный внешний секрет обновления/загрузки через `BcsInvestApiSettings.RefreshToken` или `BcsInvestApiClientFactory.Create(...)`.
 
-Before each broker API request, the SDK obtains a usable access token internally. The first authorized request uses the
-configured external secret. Successful auth updates the in-memory token pair. Later refresh calls use the in-memory
-rotated `refresh_token` while it is usable; if it is missing or expires within `TokenRefreshSkew`, the SDK uses the
-configured external secret again.
+Перед каждым запросом к брокерскому API SDK внутренне получает рабочий access-токен. Первый авторизованный запрос использует настроенный внешний секрет. Успешная авторизация обновляет пару токенов в памяти. Последующие вызовы обновления используют вращающийся `refresh_token` в памяти, пока он доступен; если он отсутствует или истекает в течение `TokenRefreshSkew`, SDK повторно использует настроенный внешний секрет.
 
-Refresh-token grant failures are propagated as `BcsAuthException`. The SDK does not apply retry policies, Polly,
-backoff, disk token persistence, or hidden resilience wrappers around the grant. If the process exits, in-memory token
-state is lost.
+Сбои выдачи refresh-токена распространяются как `BcsAuthException`. SDK не применяет политики повторных попыток, Polly, обратного давления, постоянного хранения токенов на диске или скрытых резилиент-обёрток вокруг выдачи. Если процесс завершается, состояние токенов в памяти теряется.
 
-## Direct Usage
+## Прямое использование
 
 ```csharp
 using Bcs.InvestApi;
@@ -175,7 +162,7 @@ await using var client = BcsInvestApiClientFactory.Create(
 var limits = await client.Limits.GetLimitsAsync();
 ```
 
-The following calls are independent direct endpoint examples, not an orchestration flow:
+Приведённые ниже вызовы являются независимыми примерами прямых конечных точек, а не оркестрационным потоком:
 
 ```csharp
 using Bcs.InvestApi.Contracts.Enums;
@@ -257,9 +244,9 @@ var cancelResult = await writeClient.Orders.CancelOrderAsync(
     clientOrderId: Guid.NewGuid());
 ```
 
-## DI Usage
+## Использование с DI
 
-Install/reference `Bcs.InvestApi.DependencyInjection` only when the host already uses Microsoft.Extensions.DependencyInjection.
+Устанавливайте/ссылайтесь на `Bcs.InvestApi.DependencyInjection` только когда хост-приложение уже использует Microsoft.Extensions.DependencyInjection.
 
 ```csharp
 using Bcs.InvestApi;
@@ -272,14 +259,11 @@ services.AddBcsInvestApiClient(settings =>
 });
 ```
 
-`AddBcsInvestApiClient` registers the facade and internal token services. Endpoint usage is the same direct method usage
-shown above.
+`AddBcsInvestApiClient` регистрирует фасад и внутренние токен-сервисы. Использование конечных точек такое же, как показано выше.
 
-## Pagination
+## Пагинация
 
-SDK requests exactly one page. Instrument lookup, order search, and trade search methods perform one BCS request per
-call; callers pass `page` and `size` explicitly and own any multi-page iteration policy. The server owns validation of
-supported values and max limits.
+SDK запрашивает ровно одну страницу. Методы поиска инструментов, заявок и сделок выполняют один запрос к BCS за вызов; вызывающая сторона явно передаёт `page` и `size` и самостоятельно ведёт любую политику многостраничной итерации. Сервер отвечает за валидацию поддерживаемых значений и максимальных лимитов.
 
 ```csharp
 var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
@@ -288,8 +272,7 @@ var instruments = await client.Instruments.GetInstrumentsByIsinsAsync(
     size: 50);
 ```
 
-When the BCS endpoint needs a base asset ticker, pass `baseAssetTicker`; the SDK forwards it as a query parameter when
-provided.
+Если для конечной точки BCS нужен базовый тикер актива, передайте `baseAssetTicker`; SDK передаёт его как query-параметр при наличии.
 
 ```csharp
 var sberOptions = await client.Instruments.GetInstrumentsByTypeAsync(
@@ -299,9 +282,9 @@ var sberOptions = await client.Instruments.GetInstrumentsByTypeAsync(
     baseAssetTicker: "SBER");
 ```
 
-## Historical Candles
+## Исторические свечи
 
-`MarketData.GetCandlesAsync(...)` calls `GET /trade-api-market-data-connector/api/v1/candles-chart`.
+`MarketData.GetCandlesAsync(...)` вызывает `GET /trade-api-market-data-connector/api/v1/candles-chart`.
 
 ```csharp
 using Bcs.InvestApi.Contracts.Enums;
@@ -314,21 +297,19 @@ var candles = await client.MarketData.GetCandlesAsync(
     timeFrame: BcsCandleTimeFrames.Hour1);
 ```
 
-BCS allows at most 1440 candles in one request.
+BCS разрешает не более 1440 свечей в одном запросе.
 
-## Sample
+## Пример
 
-`sample/Bcs.InvestApi.Sample` is a command-based console for raw endpoint calls. It is not recommended application
-architecture and intentionally does not show orchestration, hosting, logging, retries, background services, or domain
-workflows.
+`sample/Bcs.InvestApi.Sample` — это командная консоль для вызовов прямых конечных точек. Это не рекомендуемая архитектура приложения и намеренно не демонстрирует оркестрацию, хостинг, логирование, повторные попытки, фоновые сервисы или доменные рабочие процессы.
 
-Show available commands:
+Показать доступные команды:
 
 ```bash
 dotnet run --project sample/Bcs.InvestApi.Sample -- help
 ```
 
-Run one command with the first command-line argument, `BCS_SAMPLE_COMMAND`, or the legacy `BCS_SAMPLE_ENDPOINT`:
+Выполните одну команду с первым аргументом командной строки, `BCS_SAMPLE_COMMAND` или устаревшим `BCS_SAMPLE_ENDPOINT`:
 
 ```bash
 dotnet run --project sample/Bcs.InvestApi.Sample -- limits
@@ -336,7 +317,7 @@ dotnet run --project sample/Bcs.InvestApi.Sample -- candles
 dotnet run --project sample/Bcs.InvestApi.Sample -- stream-quotes
 ```
 
-Supported read commands:
+Поддерживаемые команды чтения:
 
 ```text
 smoke
@@ -354,7 +335,7 @@ trades
 margin-discounts
 ```
 
-Supported WebSocket commands:
+Поддерживаемые WebSocket-команды:
 
 ```text
 stream-candles
@@ -368,7 +349,7 @@ stream-order-transactions
 stream-margin
 ```
 
-Trading commands are explicit and use `trade-api-write` by default:
+Торговые команды явные и по умолчанию используют `trade-api-write`:
 
 ```text
 order-create
@@ -376,58 +357,50 @@ order-update
 order-cancel
 ```
 
-The sample requires `BCS_REFRESH_TOKEN` for all commands except `help` and does not include real tokens.
+Для всех команд, кроме `help`, образец требует `BCS_REFRESH_TOKEN` и не содержит реальных токенов.
 
-Common environment variables:
+Общие переменные среды:
 
-| Variable | Default | Used by |
-|---|---:|---|
-| `BCS_SAMPLE_CLIENT_ID` | `read` or `write` for trading commands | all commands |
-| `BCS_SAMPLE_CLASS_CODE` | `TQBR` | instrument, market data, schedule, orders, trades, streams |
-| `BCS_SAMPLE_TICKER` | `SBER` | instrument, market data, schedule, orders, trades, streams |
+| Переменная | По умолчанию | Используется |
+|---|---|---|
+| `BCS_SAMPLE_CLIENT_ID` | `read` или `write` для торговых команд | все команды |
+| `BCS_SAMPLE_CLASS_CODE` | `TQBR` | инструменты, рыночные данные, расписание, заявки, сделки, потоки |
+| `BCS_SAMPLE_TICKER` | `SBER` | инструменты, рыночные данные, расписание, заявки, сделки, потоки |
 | `BCS_SAMPLE_ISINS` | `RU0009029540,RU0007661625,RU000A0J2Q06` | `instruments-by-isin` |
 | `BCS_SAMPLE_TICKERS` | `SBER,GAZP,ROSN` | `instruments-by-ticker` |
-| `BCS_SAMPLE_PAGE` | `0` | paged HTTP commands |
-| `BCS_SAMPLE_SIZE` | `10` | paged HTTP commands |
-| `BCS_SAMPLE_SEARCH_FROM` | UTC now minus 7 days | `orders`, `trades` |
-| `BCS_SAMPLE_SEARCH_TO` | UTC now | `orders`, `trades` |
+| `BCS_SAMPLE_PAGE` | `0` | HTTP-команды с пагинацией |
+| `BCS_SAMPLE_SIZE` | `10` | HTTP-команды с пагинацией |
+| `BCS_SAMPLE_SEARCH_FROM` | UTC сейчас минус 7 дней | `orders`, `trades` |
+| `BCS_SAMPLE_SEARCH_TO` | UTC сейчас | `orders`, `trades` |
 | `BCS_SAMPLE_CANDLE_TIMEFRAME` | `Minute1` | `candles`, `stream-candles` |
-| `BCS_SAMPLE_CANDLES_FROM` | UTC now minus 1 day | `candles` |
-| `BCS_SAMPLE_CANDLES_TO` | UTC now | `candles` |
+| `BCS_SAMPLE_CANDLES_FROM` | UTC сейчас минус 1 день | `candles` |
+| `BCS_SAMPLE_CANDLES_TO` | UTC сейчас | `candles` |
 | `BCS_SAMPLE_INSTRUMENT_TYPE` | `Stock` | `instruments-by-type` |
-| `BCS_SAMPLE_BASE_ASSET_TICKER` | unset | `instruments-by-type` |
-| `BCS_SAMPLE_STREAM_MESSAGES` | `5` | stream commands |
-| `BCS_SAMPLE_STREAM_TIMEOUT_SECONDS` | `30` | stream commands |
+| `BCS_SAMPLE_BASE_ASSET_TICKER` | не задано | `instruments-by-type` |
+| `BCS_SAMPLE_STREAM_MESSAGES` | `5` | команды потоков |
+| `BCS_SAMPLE_STREAM_TIMEOUT_SECONDS` | `30` | команды потоков |
 | `BCS_SAMPLE_ORDERBOOK_DEPTH` | `20` | `stream-orderbook` |
 
-Order-specific variables:
+Переменные, специфичные для заявок:
 
-| Operation | Required | Optional |
+| Операция | Обязательно | Необязательно |
 |---|---|---|
-| Status | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | legacy alias: `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` |
-| Create | `BCS_SAMPLE_ORDER_QUANTITY`; `BCS_SAMPLE_ORDER_PRICE` for non-market orders | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_SIDE` (default `Buy`), `BCS_SAMPLE_ORDER_TYPE` (default `Limit`) |
-| Update | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_QUANTITY` | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_PRICE` |
-| Cancel | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CLIENT_ORDER_ID` |
+| Статус | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | устаревший псевдоним: `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` |
+| Создать | `BCS_SAMPLE_ORDER_QUANTITY`; `BCS_SAMPLE_ORDER_PRICE` для нерыночных заявок | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_SIDE` (по умолчанию `Buy`), `BCS_SAMPLE_ORDER_TYPE` (по умолчанию `Limit`) |
+| Обновить | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_QUANTITY` | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_PRICE` |
+| Отменить | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CLIENT_ORDER_ID` |
 
-Legacy create/update/cancel variable aliases from older sample versions are still accepted where practical
-(`BCS_SAMPLE_CREATE_*`, `BCS_SAMPLE_UPDATE_*`, `BCS_SAMPLE_CANCEL_*`). Bad env-var values fail fast with a non-zero exit
-code before any network call.
+Устаревшие псевдонимы переменных create/update/cancel из старых версий образца по-прежнему принимаются в доступных случаях (`BCS_SAMPLE_CREATE_*`, `BCS_SAMPLE_UPDATE_*`, `BCS_SAMPLE_CANCEL_*`). Некорректные значения переменных окружения быстро завершаются с ненулевым кодом до любого сетевого вызова.
 
-## Raw Auth Boundary
+## Граница «сырой» авторизации
 
-`BcsInvestApiClient` does not expose raw auth exchange APIs, token manager APIs, refresh tokens, or access-token lifecycle
-controls. Runtime rotated refresh tokens returned by BCS remain an internal SDK detail. Callers should use broker API
-methods such as `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`,
-`GetTradingScheduleStatusAsync(...)`, `GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`,
-`GetOrderStatusAsync(...)`, `SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, `CancelOrderAsync(...)`,
-`SearchTradesAsync(...)`, and `GetInstrumentsDiscountsAsync(...)`.
+`BcsInvestApiClient` не выставляет APIs сырой авторизационной обмена, API токен-менеджера, refresh-токены или управление жизненным циклом access-токена. Вращающиеся refresh-токены, возвращаемые BCS, остаются внутренней деталью SDK. Вызывающая сторона должна использовать брокерские API-методы, такие как `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`, `GetTradingScheduleStatusAsync(...)`, `GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`, `GetOrderStatusAsync(...)`, `SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, `CancelOrderAsync(...)`, `SearchTradesAsync(...)` и `GetInstrumentsDiscountsAsync(...)`.
 
-If a diagnostic or low-level raw auth API is needed later, keep it separate from the main facade and make refresh-token
-exposure explicit in that API.
+Если позже потребуется диагностический или низкоуровневый API «сырой» авторизации, отделите его от основного фасада и сделайте выставление refresh-токена явным в этом API.
 
-## Error Handling
+## Обработка ошибок
 
-BCS non-success auth responses are exposed as `BcsAuthException`:
+Неудачные ответы авторизации BCS выставляются как `BcsAuthException`:
 
 ```csharp
 using Bcs.InvestApi.Contracts.Exceptions;
@@ -438,26 +411,26 @@ try
 }
 catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
 {
-    // Decide recovery behavior in the host/application layer.
+    // Определите поведение восстановления в слое хоста/приложения.
     throw;
 }
 ```
 
-## HttpClient Ownership
+## Владение HttpClient
 
-The internal auth transport does not dispose a `HttpClient` passed from outside.
+Внутренний авторизационный транспорт не освобождает `HttpClient`, переданный извне.
 
-- In DI mode, `IHttpClientFactory` owns transport lifecycle.
-- In direct factory mode, `BcsInvestApiClientFactory` creates and disposes its own `HttpClient` when the facade is disposed.
-- If a custom `HttpMessageHandler` is passed to the factory, the handler is not disposed by the SDK.
+- В режиме DI `IHttpClientFactory` владеет жизненным циклом транспорта.
+- В режиме прямой фабрики `BcsInvestApiClientFactory` создаёт и освобождает собственный `HttpClient` при освобождении фасада.
+- Если к фабрике передан пользовательский `HttpMessageHandler`, SDK не освобождает обработчик.
 
-## Build
+## Сборка
 
 ```bash
 dotnet build Bcs.InvestApi.sln
 ```
 
-## Test
+## Тесты
 
 ```bash
 dotnet test Bcs.InvestApi.sln

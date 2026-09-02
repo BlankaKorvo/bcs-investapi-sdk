@@ -1,81 +1,77 @@
-# Bcs.InvestApi Architecture
+# Архитектура Bcs.InvestApi
 
-Bcs.InvestApi is a thin transport + DTO + auth helper SDK for BCS Trade API.
+Bcs.InvestApi — это компактный SDK-транспорт + DTO + вспомогательное средство авторизации для BCS Trade API.
 
-The SDK boundary is intentionally small:
+Граница SDK намеренно мала:
 
-- HTTP transport for BCS Trade API endpoints.
-- Raw request/response DTOs that stay close to the JSON API.
-- Endpoint methods that map directly to server endpoints.
-- Minimal technical validation for null/empty arguments and unsafe transport settings.
-- Auth helper code used only to authorize SDK HTTP requests.
-- In-memory access/refresh token cache for the current process.
+- HTTP-транспорт для конечных точек BCS Trade API.
+- «Сырые» DTO запросов/ответов, близкие к JSON API.
+- Методы конечных точек, которые напрямую соответствуют серверным конечным точкам.
+- Минимальная техническая валидация аргументов null/empty и небезопасных настроек транспорта.
+- Код вспомогательного средства авторизации, используемый только для авторизации HTTP-запросов SDK.
+- Кэш access/refresh токенов в памяти для текущего процесса.
 
-## Boundary Rules
+## Правила границ
 
-- Application layer owns business logic.
-- Raw endpoints stay in SDK, including portfolio, limits, instruments, market data, and trading schedule endpoints.
-- Application layer owns trading workflows, portfolio aggregation, normalization, strategy models, and DTO-to-domain mapping.
-- Application layer owns pagination loops. SDK endpoint methods perform one server request per call and do not auto-paginate.
-- Application layer owns durable secret storage. SDK does not persist tokens to disk.
-- No disk token persistence.
-- No background token daemon or external token store in SDK core.
-- No automatic refresh-token retry. The refresh-token grant is not wrapped in retry policies, Polly, backoff, or hidden resilience pipelines.
-- No hidden smart wrappers over raw endpoints.
+- Слой приложения владеет бизнес-логикой.
+- Прямые конечные точки остаются в SDK, включая портфель, лимиты, инструменты, рыночные данные и конечные точки торгового расписания.
+- Слой приложения владеет торговыми рабочими процессами, агрегацией портфеля, нормализацией, стратегическими моделями и маппингом DTO-to-domain.
+- Слой приложения владеет циклами пагинации. Методы конечных точек SDK выполняют один запрос к серверу за вызов и не выполняют автопагинацию.
+- Слой приложения владеет постоянным хранением секретов. SDK не сохраняет токены на диске.
+- Постоянное хранение токенов на диске отсутствует.
+- Фоновый демон токенов или внешнее хранилище токенов в ядре SDK отсутствуют.
+- Автоматическая повторная попытка обновления токена отсутствует. Выдача refresh-токена не обёрнута в политики повторных попыток, Polly, обратное давление или скрытые резилиент-пайплайны.
+- Скрытые «умные» обёртки над прямыми конечными точками отсутствуют.
 
-## Package Shape
+## Структура пакета
 
-`Bcs.InvestApi` is the core package. It must not depend on `Microsoft.Extensions.*`.
+`Bcs.InvestApi` — это основной пакет. Он не должен зависеть от `Microsoft.Extensions.*`.
 
-`Bcs.InvestApi.DependencyInjection` is a separate package for Microsoft.Extensions.DependencyInjection registration.
+`Bcs.InvestApi.DependencyInjection` — отдельный пакет для регистрации Microsoft.Extensions.DependencyInjection.
 
-## Auth Scope
+## Область авторизации
 
-The SDK may hold the runtime access token and rotated refresh token in memory so it can authorize broker endpoint
-requests. That token state is private SDK runtime state:
+SDK может хранить runtime access-токен и вращающийся refresh-токен в памяти, чтобы авторизовать запросы к брокерским конечным точкам. Это состояние является частным runtime-состоянием SDK:
 
-- It is lost when the process exits.
-- It is not written to files, user profiles, databases, or other stores.
-- It is not exposed through the public facade.
+- Оно теряется при завершении процесса.
+- Оно не записывается в файлы, пользовательские профили, базы данных или другие хранилища.
+- Оно не выставляется через публичный фасад.
 
-The host/application layer supplies the stable bootstrap refresh token or equivalent secret when constructing the SDK.
-If an application needs durable secret storage, rotation policy, retry policy, audit logging, or operational recovery, that
-belongs above the SDK.
+Хост/слой приложения предоставляет стабильный bootstrap refresh-токен или эквивалентный секрет при создании SDK. Если приложению нужно постоянное хранение секретов, политика вращения, политика повторных попыток, аудит логирование или операционное восстановление, это находится выше SDK.
 
-## Endpoint Scope
+## Область конечных точек
 
-Endpoint methods remain in the SDK when they are direct server endpoints. Portfolio is a raw server endpoint and stays in
-the SDK. The SDK should not remove raw endpoints because an application could build higher-level behavior on top of them.
+Методы конечных точек остаются в SDK, когда они являются прямыми серверными конечными точками. Портфель — это сырая серверная конечная точка и остаётся в SDK. SDK не должен удалять сырые конечные точки, поскольку приложение может построить более высокоуровневое поведение поверх них.
 
-The SDK should not add application-level helpers such as:
+SDK не должен добавлять вспомогательные средства уровня приложения, такие как:
 
-- strategy/domain models;
-- repository/store abstractions;
-- portfolio aggregation;
-- DTO-to-domain mapping;
-- backtest or trading-system workflows;
-- pagination loops that call multiple pages automatically.
+- стратегические/доменные модели;
+- абстракции репозиториев/хранилищ;
+- агрегация портфеля;
+- маппинг DTO-to-domain;
+- бэктест или торговые системные рабочие процессы;
+- циклы пагинации, вызывающие несколько страниц автоматически.
 
-## Scope Matrix
+## Матрица областей
 
-Use this table when deciding whether a change belongs in the SDK or in the application layer.
+Используйте эту таблицу при решении, куда относится изменение — в SDK или в слой приложения.
 
-| In SDK | In application |
+| В SDK | В приложении |
 |---|---|
-| JSON field shape (snake-case, `[JsonPropertyName]`, hyphenated keys) | Server numeric limits enforced upfront (e.g. `size <= 100`, candles `bars <= 1440`, BCS-specific business ceilings) |
-| Required fields and "required if" structural rules from docs (e.g. `baseAssetTicker` required when `type=OPTIONS`) | Domain validation that depends on business state (whitelists of tickers, account-level ceilings, daily quotas) |
-| Format-level validation (`Guid.Empty` rejected, `string?` non-empty, ISO date formatting) | Numeric range / size validation (page sizes, quantities, price floors) |
-| Serializing optional body fields as omitted (`[JsonIgnore(WhenWritingNull)]`) when docs mark them optional | When to send `null` vs. an explicit default value |
-| Parsing the common error envelope into `BcsApiException.ApiError` (timestamp/traceId/type/errors/displayOptions) | Reaction to an error (retry, backoff, alerting, user-visible message) |
-| Identifying server error codes as constants (`BcsApiErrorTypes.ResourceExhausted`, `…ValidationError`, etc.) | Interpreting what to do when each code arrives, and any endpoint-specific codes (e.g. `CANDLE_LIMIT_EXCEEDED`) the application wants to match |
-| Auth: refresh-token grant, in-memory access-token cache, `BcsTokenManager` lifecycle | Durable secret storage, key rotation policy, audit logging, alerts on auth failure |
-| URL and header construction, JSON options (`BcsJson.SerializerOptions`) | Persistent configuration files, environment binding, deployment topology |
-| Opening an authenticated `ClientWebSocket` (handshake + `Authorization: Bearer`) | Long-lived WebSocket lifecycle: reconnect policy, backoff, ping/pong, multiplexing, buffering, dispatch to consumers |
-| Static URL constants for known endpoints (HTTP and WebSocket) | Overriding URLs for tests, staging environments, alternative regions |
-| Server-defined enum values surfaced as constants or typed enums | Translating those enums into domain language for the UI/business code |
+| Форма JSON-полей (snake_case, `[JsonPropertyName]`, дефисные ключи) | Серверные числовые лимиты, принудительно применяемые заранее (например, `size <= 100`, свечи `bars <= 1440`, бизнес-потолки, специфичные для BCS) |
+| Обязательные поля и структурные правила «обязательно, если» из документации (например, `baseAssetTicker` требуется при `type=OPTIONS`) | Доменная валидация, зависящая от бизнес-состояния (белые списки тикеров, потолки на уровне аккаунта, дневные квоты) |
+| Валидация формата (`Guid.Empty` отвергается, `string?` не пусто, форматирование ISO-даты) | Числовой диапазон / размер валидации (размеры страниц, количества, ценовые полы) |
+| Сериализация необязательных полей тела как опущенных (`[JsonIgnore(WhenWritingNull)]`), когда документация помечает их необязательными | Когда отправлять `null` вместо явного значения по умолчанию |
+| Разбор общего конверта ошибки в `BcsApiException.ApiError` (timestamp/traceId/type/errors/displayOptions) | Реакция на ошибку (повторная попытка, обратное давление, оповещение, пользовательское сообщение) |
+| Идентификация кодов ошибок сервера как констант (`BcsApiErrorTypes.ResourceExhausted`, `…ValidationError` и т.д.) | Интерпретация того, что делать при поступлении каждого кода, и любых endpoint-специфичных кодов (например, `CANDLE_LIMIT_EXCEEDED`), которые приложение хочет сопоставить |
+| Авторизация: выдача refresh-токена, кэш access-токена в памяти, жизненный цикл `BcsTokenManager` | Постоянное хранение секретов, политика вращения ключей, аудит логирование, оповещения при сбое авторизации |
+| Построение URL и заголовков, JSON-параметры (`BcsJson.SerializerOptions`) | Файлы постоянной конфигурации, привязка к окружению, топология развёртывания |
+| Открытие аутентифицированного `ClientWebSocket` (рукопожатие + `Authorization: Bearer`) | Долгоживущий жизненный цикл WebSocket: политика переподключения, обратное давление, ping/pong, мультиплексирование, буферизация, маршрутизация потребителям |
+| Статические URL-константы для известных конечных точек (HTTP и WebSocket) | Переопределение URL для тестов, стейджинговых окружений, альтернативных регионов |
+| Значения enum, определённые сервером, выставляемые как константы или типизированные enum | Перевод этих enum на язык домена для UI/бизнес-кода |
 
-When in doubt:
+Если сомневаетесь:
 
-- If a check is rooted in the JSON contract or the auth/transport protocol, it belongs in the SDK.
-- If a check is rooted in a tunable numeric limit, a policy, or a runtime decision, it belongs in the application.
-- Server limits are last-resort enforcement. The SDK relays the error; the application owns the response.
+- Если проверка основана на JSON-контракте или протоколе авторизации/транспорта, она относится к SDK.
+- Если проверка основана на настраиваемом числовом лимите, политике или runtime-решении, она относится к приложению.
+- Серверные лимиты — это средство принуждения последней инстанции. SDK передаёт ошибку; приложение владеет ответом.
