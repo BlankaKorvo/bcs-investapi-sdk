@@ -19,7 +19,7 @@ public sealed class BcsInvestApiSettings
     /// <summary>
     /// BCS auth client id. Supported values map to trade-api-read and trade-api-write.
     /// </summary>
-    public BcsAuthClientIds ClientId { get; set; } = BcsAuthClientIds.TradeApiRead;
+    public BcsAuthClientIds ClientId { get; set; } = BcsAuthClientIds.TradeApiWrite;
 
     /// <summary>
     /// Full Keycloak token endpoint URL.
