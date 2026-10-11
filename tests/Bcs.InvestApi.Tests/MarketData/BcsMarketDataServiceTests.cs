@@ -47,7 +47,8 @@ public sealed class BcsMarketDataServiceTests
             " SBER ",
             new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
-            BcsCandleTimeFrames.Hour1);
+            BcsCandleTimeFrames.Hour1,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -89,7 +90,8 @@ public sealed class BcsMarketDataServiceTests
                 ticker!,
                 new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-                BcsCandleTimeFrames.Minute1));
+                BcsCandleTimeFrames.Minute1,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -103,7 +105,8 @@ public sealed class BcsMarketDataServiceTests
                 "SBER",
                 new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
-                (BcsCandleTimeFrames)999));
+                (BcsCandleTimeFrames)999,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -117,7 +120,8 @@ public sealed class BcsMarketDataServiceTests
                 "SBER",
                 new DateTimeOffset(2025, 11, 14, 8, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
-                BcsCandleTimeFrames.Minute1));
+                BcsCandleTimeFrames.Minute1,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -136,7 +140,8 @@ public sealed class BcsMarketDataServiceTests
             "SBER",
             new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2025, 11, 15, 7, 1, 0, TimeSpan.Zero),
-            BcsCandleTimeFrames.Minute1);
+            BcsCandleTimeFrames.Minute1,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.RequestCount);
     }
@@ -158,7 +163,8 @@ public sealed class BcsMarketDataServiceTests
             "SBER",
             startDate,
             startDate.AddMonths(1441),
-            BcsCandleTimeFrames.Month);
+            BcsCandleTimeFrames.Month,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.RequestCount);
     }

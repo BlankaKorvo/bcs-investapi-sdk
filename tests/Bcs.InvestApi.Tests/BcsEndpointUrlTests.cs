@@ -23,7 +23,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetLimitsAsync();
+        await service.GetLimitsAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -44,7 +44,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetLimitsAsync();
+        await service.GetLimitsAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -64,7 +64,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetPortfolioAsync();
+        await service.GetPortfolioAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -84,7 +84,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
+        await service.GetDailyTradingScheduleAsync("TQBR", "SBER", TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -104,7 +104,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 2, size: 50);
+        await service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 2, size: 50, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -125,7 +125,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 2, size: 50);
+        await service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 2, size: 50, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -150,7 +150,8 @@ public sealed class BcsEndpointUrlTests
             BcsInstrumentTypes.Options,
             page: 2,
             size: 50,
-            baseAssetTicker: "SBER");
+            baseAssetTicker: "SBER",
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -176,7 +177,8 @@ public sealed class BcsEndpointUrlTests
             "SBER",
             new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero),
-            BcsCandleTimeFrames.Hour1);
+            BcsCandleTimeFrames.Hour1,
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -201,7 +203,8 @@ public sealed class BcsEndpointUrlTests
             new BcsOrdersSearchRequest(),
             page: 2,
             size: 50,
-            sort: new[] { BcsOrderSort.UpdateDateTimeDesc });
+            sort: new[] { BcsOrderSort.UpdateDateTimeDesc },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -232,7 +235,8 @@ public sealed class BcsEndpointUrlTests
                 Ticker = "APTK",
                 ClassCode = "TQBR",
                 Price = 9.530m,
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -255,7 +259,7 @@ public sealed class BcsEndpointUrlTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+        await service.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"), TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -278,7 +282,8 @@ public sealed class BcsEndpointUrlTests
 
         await service.CancelOrderAsync(
             Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-            Guid.Parse("12345678-1234-1234-1234-123456789123"));
+            Guid.Parse("12345678-1234-1234-1234-123456789123"),
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(
@@ -306,7 +311,8 @@ public sealed class BcsEndpointUrlTests
                 ClientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432"),
                 OrderQuantity = 10,
                 Price = 9.540m,
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(

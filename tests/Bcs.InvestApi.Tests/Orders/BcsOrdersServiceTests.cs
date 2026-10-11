@@ -41,7 +41,8 @@ public sealed class BcsOrdersServiceTests
                 Ticker = "APTK",
                 ClassCode = "TQBR",
                 Price = 9.530m,
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal(
@@ -101,7 +102,7 @@ public sealed class BcsOrdersServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var response = await service.GetOrderStatusAsync(clientOrderId);
+        var response = await service.GetOrderStatusAsync(clientOrderId, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -209,7 +210,8 @@ public sealed class BcsOrdersServiceTests
             },
             page: 2,
             size: 50,
-            sort: new[] { BcsOrderSort.OrderDateTimeDesc, BcsOrderSort.TickerAsc });
+            sort: new[] { BcsOrderSort.OrderDateTimeDesc, BcsOrderSort.TickerAsc },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal(
@@ -273,7 +275,7 @@ public sealed class BcsOrdersServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var orders = await service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: 50);
+        var orders = await service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new Uri("https://example.test/trade-api-bff-order-details/api/v1/orders/search?page=0&size=50"),
@@ -288,7 +290,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.CreateOrderAsync(null!));
+            service.CreateOrderAsync(null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -313,7 +315,8 @@ public sealed class BcsOrdersServiceTests
                 Ticker = "APTK",
                 ClassCode = "TQBR",
                 // Price intentionally omitted for a market order.
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             """{"clientOrderId":"12345678-1234-1234-1234-123456789123","side":"1","orderType":"1","orderQuantity":10,"ticker":"APTK","classCode":"TQBR"}""",
@@ -326,7 +329,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { ClientOrderId = Guid.Empty }));
+            service.CreateOrderAsync(CreateOrderRequest() with { ClientOrderId = Guid.Empty }, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -335,7 +338,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { Side = (BcsOrderSide)999 }));
+            service.CreateOrderAsync(CreateOrderRequest() with { Side = (BcsOrderSide)999 }, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -344,7 +347,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { OrderType = (BcsOrderType)999 }));
+            service.CreateOrderAsync(CreateOrderRequest() with { OrderType = (BcsOrderType)999 }, TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -356,7 +359,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { Ticker = ticker! }));
+            service.CreateOrderAsync(CreateOrderRequest() with { Ticker = ticker! }, TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -368,7 +371,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { ClassCode = classCode! }));
+            service.CreateOrderAsync(CreateOrderRequest() with { ClassCode = classCode! }, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -377,7 +380,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetOrderStatusAsync(Guid.Empty));
+            service.GetOrderStatusAsync(Guid.Empty, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -400,7 +403,7 @@ public sealed class BcsOrdersServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var response = await service.CancelOrderAsync(originalClientOrderId, clientOrderId);
+        var response = await service.CancelOrderAsync(originalClientOrderId, clientOrderId, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal(
@@ -441,7 +444,8 @@ public sealed class BcsOrdersServiceTests
                 ClientOrderId = clientOrderId,
                 OrderQuantity = 10,
                 Price = 9.540m,
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal(
@@ -463,7 +467,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CancelOrderAsync(Guid.Empty, Guid.Parse("12345678-1234-1234-1234-123456789123")));
+            service.CancelOrderAsync(Guid.Empty, Guid.Parse("12345678-1234-1234-1234-123456789123"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -472,7 +476,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CancelOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), Guid.Empty));
+            service.CancelOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), Guid.Empty, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -495,7 +499,8 @@ public sealed class BcsOrdersServiceTests
                 ClientOrderId = clientOrderId,
                 OrderQuantity = 10,
                 // Price intentionally omitted; docs mark price as optional.
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","orderQuantity":10}""",
@@ -508,7 +513,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.UpdateOrderAsync(Guid.Empty, CreateUpdateOrderRequest()));
+            service.UpdateOrderAsync(Guid.Empty, CreateUpdateOrderRequest(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -517,7 +522,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.UpdateOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), null!));
+            service.UpdateOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -528,7 +533,8 @@ public sealed class BcsOrdersServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.UpdateOrderAsync(
                 Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-                CreateUpdateOrderRequest() with { ClientOrderId = Guid.Empty }));
+                CreateUpdateOrderRequest() with { ClientOrderId = Guid.Empty },
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -537,7 +543,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: -1, size: 50));
+            service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: -1, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -548,7 +554,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: size));
+            service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: size, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -562,7 +568,7 @@ public sealed class BcsOrdersServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: 101);
+        await service.SearchOrdersAsync(new BcsOrdersSearchRequest(), page: 0, size: 101, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new Uri("https://example.test/trade-api-bff-order-details/api/v1/orders/search?page=0&size=101"),
@@ -575,7 +581,7 @@ public sealed class BcsOrdersServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.SearchOrdersAsync(null!, page: 0, size: 50));
+            service.SearchOrdersAsync(null!, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -587,7 +593,8 @@ public sealed class BcsOrdersServiceTests
             service.SearchOrdersAsync(
                 new BcsOrdersSearchRequest { Side = (BcsOrderSide)999 },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -599,7 +606,8 @@ public sealed class BcsOrdersServiceTests
             service.SearchOrdersAsync(
                 new BcsOrdersSearchRequest { OrderStatus = new[] { (BcsOrderStatus)999 } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -611,7 +619,8 @@ public sealed class BcsOrdersServiceTests
             service.SearchOrdersAsync(
                 new BcsOrdersSearchRequest { OrderTypes = new[] { (BcsOrderType)999 } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -624,7 +633,8 @@ public sealed class BcsOrdersServiceTests
                 new BcsOrdersSearchRequest(),
                 page: 0,
                 size: 50,
-                sort: new[] { (BcsOrderSort)999 }));
+                sort: new[] { (BcsOrderSort)999 },
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -639,7 +649,8 @@ public sealed class BcsOrdersServiceTests
             service.SearchOrdersAsync(
                 new BcsOrdersSearchRequest { Tickers = new[] { "SBER", ticker! } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -654,7 +665,8 @@ public sealed class BcsOrdersServiceTests
             service.SearchOrdersAsync(
                 new BcsOrdersSearchRequest { ClassCodes = new[] { "TQBR", classCode! } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static BcsOrdersService CreateService() =>

@@ -22,7 +22,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiWrite,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(HttpMethod.Post, handler.LastRequest.Method);
@@ -66,7 +66,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiWrite,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(authUrl, handler.LastRequest.RequestUri);
@@ -83,7 +83,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiRead,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal("access-token-1", response.AccessToken);
         Assert.Equal(86400, response.ExpiresIn);
@@ -108,7 +108,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.InternalServerError, exception.StatusCode);
         Assert.Equal(1, handler.RequestCount);
@@ -127,7 +127,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Equal(1, handler.RequestCount);
     }
@@ -143,7 +143,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiRead,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal(0, handler.DisposeCount);
     }
@@ -159,7 +159,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiRead,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal("Bearer", response.TokenType);
     }
@@ -176,7 +176,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = (BcsAuthClientIds)999,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Equal("clientId", exception.ParamName);
         Assert.Equal(0, handler.RequestCount);
@@ -194,7 +194,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Contains("access_token", exception.Message);
     }
@@ -216,7 +216,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Contains(invalidField, exception.Message);
     }
@@ -240,7 +240,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = "refresh-token-1",
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
         Assert.Equal("invalid_grant", exception.Error);
@@ -269,7 +269,7 @@ public sealed class BcsAuthServiceTests
                 RefreshToken = refreshToken,
                 ClientId = BcsAuthClientIds.TradeApiRead,
                 GrantType = BcsGrantTypes.RefreshToken
-            }));
+            }, TestContext.Current.CancellationToken));
 
         Assert.DoesNotContain(refreshToken, exception.Message);
         Assert.DoesNotContain(refreshToken, exception.ErrorDescription);
@@ -296,7 +296,7 @@ public sealed class BcsAuthServiceTests
             RefreshToken = "refresh-token-1",
             ClientId = BcsAuthClientIds.TradeApiWrite,
             GrantType = BcsGrantTypes.RefreshToken
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Contains("client_id=trade-api-write", handler.LastRequestContent);
         Assert.Contains("refresh_token=refresh-token-1", handler.LastRequestContent);

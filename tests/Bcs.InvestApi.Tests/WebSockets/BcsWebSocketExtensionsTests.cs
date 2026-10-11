@@ -40,7 +40,7 @@ public sealed class BcsWebSocketExtensionsTests
             FakeWebSocket.Frame.Data(bytes, WebSocketMessageType.Text, endOfMessage: true),
         });
 
-        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>();
+        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken);
 
         Assert.NotNull(message);
         var depo = Assert.Single(message!.DepoLimit);
@@ -67,7 +67,7 @@ public sealed class BcsWebSocketExtensionsTests
             FakeWebSocket.Frame.Data(secondFrame, WebSocketMessageType.Text, endOfMessage: true),
         });
 
-        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>();
+        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken);
 
         Assert.NotNull(message);
         Assert.Empty(message!.DepoLimit);
@@ -87,7 +87,7 @@ public sealed class BcsWebSocketExtensionsTests
             FakeWebSocket.Frame.Data(bytes, WebSocketMessageType.Text, endOfMessage: true),
         });
 
-        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>();
+        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken);
 
         Assert.NotNull(message);
         Assert.Empty(message!.DepoLimit);
@@ -101,7 +101,7 @@ public sealed class BcsWebSocketExtensionsTests
             FakeWebSocket.Frame.Close(),
         });
 
-        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>();
+        var message = await socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken);
 
         Assert.Null(message);
     }
@@ -117,7 +117,7 @@ public sealed class BcsWebSocketExtensionsTests
         });
 
         await Assert.ThrowsAsync<WebSocketException>(() =>
-            socket.ReceiveJsonMessageAsync<BcsLimitsResponse>());
+            socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class BcsWebSocketExtensionsTests
         WebSocket? socket = null;
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            socket!.ReceiveJsonMessageAsync<BcsLimitsResponse>());
+            socket!.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class BcsWebSocketExtensionsTests
         {
             SubscribeType = "subscribe",
             ClassCode = "TQBR",
-        });
+        }, TestContext.Current.CancellationToken);
 
         var sent = Assert.Single(socket.SentFrames);
         Assert.Equal(WebSocketMessageType.Text, sent.MessageType);
@@ -154,7 +154,7 @@ public sealed class BcsWebSocketExtensionsTests
         WebSocket? socket = null;
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            socket!.SendJsonMessageAsync(new SubscribeProbe()));
+            socket!.SendJsonMessageAsync(new SubscribeProbe(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class BcsWebSocketExtensionsTests
         });
 
         var count = 0;
-        await foreach (var message in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>())
+        await foreach (var message in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
         {
             Assert.NotNull(message);
             count++;
@@ -208,7 +208,7 @@ public sealed class BcsWebSocketExtensionsTests
 
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
-            await foreach (var _ in socket!.ReceiveJsonMessagesAsync<BcsLimitsResponse>())
+            await foreach (var _ in socket!.ReceiveJsonMessagesAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
             {
             }
         });
@@ -227,7 +227,7 @@ public sealed class BcsWebSocketExtensionsTests
         });
 
         var received = new List<BcsLimitsResponse>();
-        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>())
+        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
         {
             received.Add(message);
         }
@@ -245,7 +245,7 @@ public sealed class BcsWebSocketExtensionsTests
         });
 
         var received = new List<BcsLimitsResponse>();
-        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>())
+        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
         {
             received.Add(message);
         }
@@ -265,7 +265,7 @@ public sealed class BcsWebSocketExtensionsTests
 
         await Assert.ThrowsAsync<WebSocketException>(async () =>
         {
-            await foreach (var _ in socket.ReadAllAsync<BcsLimitsResponse>())
+            await foreach (var _ in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
             {
             }
         });
@@ -278,7 +278,7 @@ public sealed class BcsWebSocketExtensionsTests
 
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
-            await foreach (var _ in socket!.ReadAllAsync<BcsLimitsResponse>())
+            await foreach (var _ in socket!.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
             {
             }
         });

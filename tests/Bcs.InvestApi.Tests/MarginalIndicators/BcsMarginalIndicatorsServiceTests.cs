@@ -38,7 +38,7 @@ public sealed class BcsMarginalIndicatorsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var discounts = await service.GetInstrumentsDiscountsAsync();
+        var discounts = await service.GetInstrumentsDiscountsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -68,7 +68,7 @@ public sealed class BcsMarginalIndicatorsServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var discounts = await service.GetInstrumentsDiscountsAsync();
+        var discounts = await service.GetInstrumentsDiscountsAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(discounts);
     }
@@ -95,7 +95,7 @@ public sealed class BcsMarginalIndicatorsServiceTests
             new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.GetInstrumentsDiscountsAsync());
+            service.GetInstrumentsDiscountsAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Equal("instruments-discounts", exception.Endpoint);

@@ -66,7 +66,8 @@ public sealed class BcsTradesServiceTests
             },
             page: 0,
             size: 50,
-            sort: new[] { BcsTradeSort.TradeDateTimeDesc });
+            sort: new[] { BcsTradeSort.TradeDateTimeDesc },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal(
@@ -118,7 +119,8 @@ public sealed class BcsTradesServiceTests
         await service.SearchTradesAsync(
             new BcsTradesSearchRequest(),
             page: 0,
-            size: 25);
+            size: 25,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("{}", handler.LastRequestContent);
         Assert.Equal(
@@ -141,7 +143,8 @@ public sealed class BcsTradesServiceTests
             new BcsTradesSearchRequest(),
             page: 1,
             size: 10,
-            sort: new[] { BcsTradeSort.TickerAsc, BcsTradeSort.TradeDateTimeDesc });
+            sort: new[] { BcsTradeSort.TickerAsc, BcsTradeSort.TradeDateTimeDesc },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new Uri("https://example.test/trade-api-bff-trade-details/api/v1/trades/search?page=1&size=10&sort=ticker%2Casc&sort=tradeDateTime%2Cdesc"),
@@ -165,7 +168,8 @@ public sealed class BcsTradesServiceTests
                 TradeNums = new[] { 1L, 9876543210L },
             },
             page: 0,
-            size: 50);
+            size: 50,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             """{"tradeNums":[1,9876543210]}""",
@@ -179,7 +183,7 @@ public sealed class BcsTradesServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: page, size: 50));
+            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: page, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -190,7 +194,7 @@ public sealed class BcsTradesServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: 0, size: size));
+            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: 0, size: size, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -205,7 +209,8 @@ public sealed class BcsTradesServiceTests
             service.SearchTradesAsync(
                 new BcsTradesSearchRequest { Tickers = new[] { ticker! } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -220,7 +225,8 @@ public sealed class BcsTradesServiceTests
             service.SearchTradesAsync(
                 new BcsTradesSearchRequest { ClassCodes = new[] { classCode! } },
                 page: 0,
-                size: 50));
+                size: 50,
+                cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -245,7 +251,7 @@ public sealed class BcsTradesServiceTests
             new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: 0, size: 50));
+            service.SearchTradesAsync(new BcsTradesSearchRequest(), page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Equal("trades-search", exception.Endpoint);

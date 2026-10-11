@@ -38,7 +38,7 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var schedule = await service.GetDailyTradingScheduleAsync("TQBR", "SBER");
+        var schedule = await service.GetDailyTradingScheduleAsync("TQBR", "SBER", TestContext.Current.CancellationToken);
 
         Assert.True(schedule.IsWorkDay);
         var entry = Assert.Single(schedule.DailySchedule);
@@ -73,7 +73,7 @@ public sealed class BcsTradingScheduleServiceTests
             new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
+            service.GetDailyTradingScheduleAsync("TQBR", "SBER", TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
         Assert.Equal(errorJson, exception.ResponseBody);
@@ -103,7 +103,7 @@ public sealed class BcsTradingScheduleServiceTests
             new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
+            service.GetDailyTradingScheduleAsync("TQBR", "SBER", TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
         Assert.Equal(errorJson, exception.ResponseBody);
@@ -121,7 +121,7 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetDailyTradingScheduleAsync(" TQBR ", " sber ");
+        await service.GetDailyTradingScheduleAsync(" TQBR ", " sber ", TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new Uri("https://example.test/trade-api-information-service/api/v1/trading-schedule/daily-schedule?classCode=%20TQBR%20&ticker=%20sber%20"),
@@ -145,7 +145,7 @@ public sealed class BcsTradingScheduleServiceTests
             new BcsHttpRequestSender());
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            service.GetDailyTradingScheduleAsync(classCode!, ticker!));
+            service.GetDailyTradingScheduleAsync(classCode!, ticker!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var status = await service.GetTradingScheduleStatusAsync("TQBR");
+        var status = await service.GetTradingScheduleStatusAsync("TQBR", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -196,7 +196,7 @@ public sealed class BcsTradingScheduleServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        await service.GetTradingScheduleStatusAsync(" TQBR ");
+        await service.GetTradingScheduleStatusAsync(" TQBR ", TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new Uri("https://example.test/trade-api-information-service/api/v1/trading-schedule/status?classCode=%20TQBR%20"),
@@ -216,7 +216,7 @@ public sealed class BcsTradingScheduleServiceTests
             new BcsHttpRequestSender());
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-            service.GetTradingScheduleStatusAsync(classCode!));
+            service.GetTradingScheduleStatusAsync(classCode!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -241,7 +241,7 @@ public sealed class BcsTradingScheduleServiceTests
             new BcsHttpRequestSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.GetTradingScheduleStatusAsync("TQBR"));
+            service.GetTradingScheduleStatusAsync("TQBR", TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Equal("trading-schedule-status", exception.Endpoint);

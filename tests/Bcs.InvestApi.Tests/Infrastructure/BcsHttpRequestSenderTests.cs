@@ -16,7 +16,7 @@ public sealed class BcsHttpRequestSenderTests
         using var exchange = await sender.SendAsync(
             new HttpClient(handler),
             () => new HttpRequestMessage(HttpMethod.Get, "https://example.test/limits"),
-            CancellationToken.None);
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, exchange.Response.StatusCode);
         Assert.Equal(1, handler.RequestCount);
@@ -40,7 +40,7 @@ public sealed class BcsHttpRequestSenderTests
                         Content = content,
                     };
                 },
-                CancellationToken.None));
+                TestContext.Current.CancellationToken));
 
         Assert.Contains("Connection reset", exception.Message);
         Assert.Equal(1, handler.RequestCount);

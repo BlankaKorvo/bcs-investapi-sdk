@@ -117,7 +117,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByIsinsAsync(
             new[] { " RU0007661625 ", "ru0007661625", "ru0007661625" },
             page: 1,
-            size: 25);
+            size: 25,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
@@ -177,7 +178,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByTickersAsync(
             new[] { " SBER ", "sber", "sber" },
             page: 1,
-            size: 25);
+            size: 25,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
@@ -232,7 +234,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Stock,
             page: 1,
-            size: 25);
+            size: 25,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -264,7 +267,8 @@ public sealed class BcsInstrumentsServiceTests
             BcsInstrumentTypes.Options,
             page: 1,
             size: 20,
-            baseAssetTicker: " SBER ");
+            baseAssetTicker: " SBER ",
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
@@ -293,7 +297,8 @@ public sealed class BcsInstrumentsServiceTests
                 BcsInstrumentTypes.Options,
                 page: 1,
                 size: 20,
-                baseAssetTicker: baseAssetTicker));
+                baseAssetTicker: baseAssetTicker,
+                cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("baseAssetTicker", exception.ParamName);
         Assert.Equal(0, handler.RequestCount);
@@ -317,7 +322,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByIsinsAsync(
             new[] { "RU0007661625" },
             page: 3,
-            size: 2);
+            size: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
@@ -337,7 +343,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 0, size: size));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: 0, size: size, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -358,7 +364,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByTickersAsync(
             new[] { "SBER" },
             page: 3,
-            size: 2);
+            size: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
@@ -388,7 +395,8 @@ public sealed class BcsInstrumentsServiceTests
         var instruments = await service.GetInstrumentsByTypeAsync(
             BcsInstrumentTypes.Stock,
             page: 3,
-            size: 2);
+            size: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, handler.RequestCount);
         Assert.Equal(
@@ -408,7 +416,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 0, size: size));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: 0, size: size, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -419,7 +427,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: 0, size: size));
+            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: 0, size: size, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -428,7 +436,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: -1, size: 50));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625" }, page: -1, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -437,7 +445,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: -1, size: 50));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER" }, page: -1, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -446,7 +454,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: -1, size: 50));
+            service.GetInstrumentsByTypeAsync(BcsInstrumentTypes.Stock, page: -1, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -455,7 +463,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByIsinsAsync(Array.Empty<string>(), page: 0, size: 50));
+            service.GetInstrumentsByIsinsAsync(Array.Empty<string>(), page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -464,7 +472,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.GetInstrumentsByIsinsAsync(null!, page: 0, size: 50));
+            service.GetInstrumentsByIsinsAsync(null!, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -473,7 +481,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTickersAsync(Array.Empty<string>(), page: 0, size: 50));
+            service.GetInstrumentsByTickersAsync(Array.Empty<string>(), page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -482,7 +490,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.GetInstrumentsByTickersAsync(null!, page: 0, size: 50));
+            service.GetInstrumentsByTickersAsync(null!, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -494,7 +502,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625", isin! }, page: 0, size: 50));
+            service.GetInstrumentsByIsinsAsync(new[] { "RU0007661625", isin! }, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -506,7 +514,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetInstrumentsByTickersAsync(new[] { "SBER", ticker! }, page: 0, size: 50));
+            service.GetInstrumentsByTickersAsync(new[] { "SBER", ticker! }, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -515,7 +523,7 @@ public sealed class BcsInstrumentsServiceTests
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.GetInstrumentsByTypeAsync((BcsInstrumentTypes)999, page: 0, size: 50));
+            service.GetInstrumentsByTypeAsync((BcsInstrumentTypes)999, page: 0, size: 50, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static BcsInstrumentsService CreateService() =>

@@ -34,7 +34,7 @@ public sealed class BcsApiExceptionTests
             new StaticTokenProvider("access-token-1"),
             CreateReadSender());
 
-        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Equal(errorJson, exception.ResponseBody);
@@ -74,7 +74,7 @@ public sealed class BcsApiExceptionTests
         await using var tokens = CreateTokenManager(settings, httpClient);
         var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender());
 
-        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
         Assert.Equal(unauthorizedJson, exception.ResponseBody);
@@ -129,7 +129,7 @@ public sealed class BcsApiExceptionTests
         await using var tokens = CreateTokenManager(settings, httpClient);
         var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender());
 
-        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
         Assert.Equal(invalidTokenJson, exception.ResponseBody);
@@ -137,7 +137,7 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(new[] { "settings-refresh-1" }, authRefreshTokens);
         Assert.Equal(2, handler.RequestCount);
 
-        var limits = await service.GetLimitsAsync();
+        var limits = await service.GetLimitsAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(limits.DepoLimit);
         Assert.Equal(new[] { "access-1", "access-2" }, limitAccessTokens);
@@ -164,7 +164,7 @@ public sealed class BcsApiExceptionTests
             new StaticTokenProvider("access-token-1"),
             CreateReadSender());
 
-        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetPortfolioAsync());
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetPortfolioAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.Forbidden, exception.StatusCode);
         Assert.Equal(errorJson, exception.ResponseBody);
@@ -197,7 +197,7 @@ public sealed class BcsApiExceptionTests
             CreateReadSender());
 
         var exception = await Assert.ThrowsAsync<BcsApiException>(() =>
-            service.GetDailyTradingScheduleAsync("TQBR", "SBER"));
+            service.GetDailyTradingScheduleAsync("TQBR", "SBER", TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Equal(errorJson, exception.ResponseBody);
@@ -230,7 +230,7 @@ public sealed class BcsApiExceptionTests
             new StaticTokenProvider("access-token-1"),
             CreateReadSender());
 
-        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync());
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
 
         Assert.Null(exception.ApiError);
         Assert.Equal(errorJson, exception.ResponseBody);

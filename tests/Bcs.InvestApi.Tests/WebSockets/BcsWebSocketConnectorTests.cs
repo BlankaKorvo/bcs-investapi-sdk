@@ -16,7 +16,7 @@ public sealed class BcsWebSocketConnectorTests
             TimeSpan.FromSeconds(20));
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            connector.ConnectAsync(null!));
+            connector.ConnectAsync(null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class BcsWebSocketConnectorTests
             TimeSpan.FromSeconds(20));
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            connector.ConnectAndSubscribeAsync(null!, new object()));
+            connector.ConnectAndSubscribeAsync(null!, new object(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class BcsWebSocketConnectorTests
             TimeSpan.FromSeconds(20));
 
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            connector.ConnectAndSubscribeAsync<object>(new Uri("wss://example.test/ws"), null!));
+            connector.ConnectAndSubscribeAsync<object>(new Uri("wss://example.test/ws"), null!, TestContext.Current.CancellationToken));
     }
 
     [Fact]

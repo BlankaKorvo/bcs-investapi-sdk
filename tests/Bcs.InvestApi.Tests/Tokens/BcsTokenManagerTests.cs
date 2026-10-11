@@ -70,7 +70,7 @@ public sealed class BcsTokenManagerTests
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-1", accessToken);
@@ -88,8 +88,8 @@ public sealed class BcsTokenManagerTests
         var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-1", "current-refresh-2"))));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var firstAccessToken = await manager.GetAccessTokenAsync();
-        var secondAccessToken = await manager.GetAccessTokenAsync();
+        var firstAccessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
+        var secondAccessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("access-1", firstAccessToken);
         Assert.Equal("access-1", secondAccessToken);
@@ -112,10 +112,10 @@ public sealed class BcsTokenManagerTests
                     : AuthResponseJson("access-2", "current-refresh-3")));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         clock.UtcNow = clock.UtcNow.AddHours(23).AddMinutes(56);
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
@@ -140,10 +140,10 @@ public sealed class BcsTokenManagerTests
                     : AuthResponseJson("access-2", "current-refresh-3")));
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         clock.UtcNow = clock.UtcNow.AddSeconds(11);
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("access-2", accessToken);
         Assert.Equal(2, handler.RequestCount);
@@ -165,7 +165,7 @@ public sealed class BcsTokenManagerTests
                 RefreshTokenExpiresAtUtc = clock.UtcNow.AddMinutes(4),
             });
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
@@ -196,7 +196,7 @@ public sealed class BcsTokenManagerTests
                 AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
             });
 
-        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
@@ -222,7 +222,7 @@ public sealed class BcsTokenManagerTests
         });
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
@@ -246,7 +246,7 @@ public sealed class BcsTokenManagerTests
                 AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
             });
 
-        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("invalid_grant", exception.Error);
@@ -268,7 +268,7 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshed = info => refreshed = info);
 
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(refreshed);
         Assert.Equal(BcsRefreshTokenSource.Bootstrap, refreshed.Source);
@@ -299,9 +299,9 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshed = info => sources.Add(info.Source));
 
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         clock.UtcNow = clock.UtcNow.AddHours(23).AddMinutes(56);
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(
             new[] { BcsRefreshTokenSource.Bootstrap, BcsRefreshTokenSource.Rotated },
@@ -321,7 +321,7 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshFailed = value => failure = value);
 
-        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
 
         Assert.NotNull(failure);
         Assert.Equal(BcsRefreshTokenSource.Bootstrap, failure.Source);
@@ -348,7 +348,7 @@ public sealed class BcsTokenManagerTests
                 AccessTokenExpiresAtUtc = clock.UtcNow.AddSeconds(-1),
             });
 
-        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
 
         Assert.NotNull(failure);
         Assert.Equal(BcsRefreshTokenSource.Rotated, failure.Source);
@@ -366,7 +366,7 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshed = _ => throw new InvalidOperationException("callback boom"));
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-1", accessToken);
@@ -386,7 +386,7 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshFailed = _ => throw new InvalidOperationException("callback boom"));
 
-        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal("invalid_grant", exception.Error);
     }
@@ -404,8 +404,8 @@ public sealed class BcsTokenManagerTests
             refreshToken: "settings-refresh-1",
             configureSettings: settings => settings.OnTokenRefreshed = _ => Interlocked.Increment(ref refreshedCount));
 
-        await manager.GetAccessTokenAsync();
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, refreshedCount);
         Assert.Equal(1, handler.RequestCount);
@@ -434,7 +434,7 @@ public sealed class BcsTokenManagerTests
                 SessionState = "session-state-1",
             });
 
-        var accessToken = await manager.GetAccessTokenAsync();
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal("access-2", accessToken);
@@ -465,7 +465,7 @@ public sealed class BcsTokenManagerTests
             throw new HttpRequestException("Connection reset after processing."));
         var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
 
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => manager.GetAccessTokenAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
         var current = GetCurrentTokenSet(manager);
 
         Assert.Contains("Connection reset", exception.Message);
@@ -505,7 +505,7 @@ public sealed class BcsTokenManagerTests
             });
 
             requestEntered.SetResult();
-            await callerCancelled.Task.WaitAsync(AsyncGuardTimeout).ConfigureAwait(false);
+            await callerCancelled.Task.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken).ConfigureAwait(false);
 
             Assert.False(cancellationToken.IsCancellationRequested);
             return JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"));
@@ -514,11 +514,11 @@ public sealed class BcsTokenManagerTests
         using var callerCts = new CancellationTokenSource();
 
         var refreshTask = manager.GetAccessTokenAsync(callerCts.Token).AsTask();
-        await requestEntered.Task.WaitAsync(AsyncGuardTimeout);
+        await requestEntered.Task.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
 
         callerCts.Cancel();
         callerCancelled.SetResult();
-        await refreshTask.WaitAsync(AsyncGuardTimeout);
+        await refreshTask.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal(1, handler.RequestCount);
@@ -551,7 +551,7 @@ public sealed class BcsTokenManagerTests
             tokenRefreshOperationTimeout: TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => manager.GetAccessTokenAsync().AsTask().WaitAsync(AsyncGuardTimeout));
+            () => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken));
         var current = GetCurrentTokenSet(manager);
 
         Assert.Equal(1, handler.RequestCount);
@@ -576,13 +576,13 @@ public sealed class BcsTokenManagerTests
 
         var accessTokenTasks = Enumerable
             .Range(0, 10)
-            .Select(_ => manager.GetAccessTokenAsync().AsTask())
+            .Select(_ => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask())
             .ToArray();
-        await requestEntered.Task.WaitAsync(AsyncGuardTimeout);
+        await requestEntered.Task.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
         Assert.Equal(1, handler.RequestCount);
 
         releaseResponse.SetResult();
-        var accessTokens = await Task.WhenAll(accessTokenTasks).WaitAsync(AsyncGuardTimeout);
+        var accessTokens = await Task.WhenAll(accessTokenTasks).WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
 
         Assert.All(accessTokens, accessToken => Assert.Equal("access-1", accessToken));
         Assert.Equal(1, handler.RequestCount);
@@ -635,12 +635,12 @@ public sealed class BcsTokenManagerTests
         Assert.NotNull(client);
         Assert.Equal(0, httpClientFactory.CreateClientCallCount);
 
-        var first = await manager.GetAccessTokenAsync();
+        var first = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var currentAfterFirstRefresh = GetCurrentTokenSet(manager);
         timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(11);
-        var second = await manager.GetAccessTokenAsync();
+        var second = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
         var currentAfterSecondRefresh = GetCurrentTokenSet(manager);
-        var providerAccessToken = await tokenProvider.GetAccessTokenAsync();
+        var providerAccessToken = await tokenProvider.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("access-1", first);
         Assert.Equal("current-refresh-2", currentAfterFirstRefresh?.RefreshToken);
@@ -709,7 +709,7 @@ public sealed class BcsTokenManagerTests
             handler,
             clock);
 
-        var limits = await client.Limits.GetLimitsAsync();
+        var limits = await client.Limits.GetLimitsAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(limits.DepoLimit);
         Assert.Equal("access-1", limitsAccessToken);

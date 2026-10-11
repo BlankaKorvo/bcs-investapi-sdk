@@ -27,7 +27,7 @@ public sealed class BcsInvestApiClientLoggingTests
             settings => settings.OnTokenRefreshed = _ => userCallbackInvoked = true);
 
         var manager = provider.GetRequiredService<BcsTokenManager>();
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         var entry = Assert.Single(capture.Entries, e => e.Level == LogLevel.Debug && e.Message.Contains("refreshed", StringComparison.Ordinal));
         Assert.Contains("Bootstrap", entry.Message, StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class BcsInvestApiClientLoggingTests
 
         var manager = provider.GetRequiredService<BcsTokenManager>();
 
-        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync().AsTask());
+        await Assert.ThrowsAsync<BcsAuthException>(() => manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask());
 
         var entry = Assert.Single(capture.Entries, e => e.Level == LogLevel.Error);
         Assert.NotNull(entry.Exception);
@@ -68,7 +68,7 @@ public sealed class BcsInvestApiClientLoggingTests
         await using var provider = BuildProvider(handler, capture, configureExtra: null);
 
         var manager = provider.GetRequiredService<BcsTokenManager>();
-        await manager.GetAccessTokenAsync();
+        await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(capture.Entries, e => e.Level == LogLevel.Debug && e.Message.Contains("refreshed", StringComparison.Ordinal));
     }
