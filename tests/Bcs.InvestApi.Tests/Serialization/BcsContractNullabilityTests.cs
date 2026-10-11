@@ -1,6 +1,7 @@
 namespace Bcs.InvestApi.Tests.Serialization;
 
 using System.Text.Json;
+using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Contracts.Instruments;
 using Bcs.InvestApi.Contracts.Limits;
 using Bcs.InvestApi.Contracts.MarketData;
@@ -280,193 +281,444 @@ public sealed class BcsContractNullabilityTests
         Assert.Equal(6.6m, futuresLimit.CbplUsedForPositions);
     }
 
+    // The *_DocumentedExample_Deserializes tests below parse the 200 OK response example
+    // ("Example (auto)") from the method's page on https://trade-api.bcs.ru/, verbatim — the
+    // site is the only source of truth for the BCS API. The site generates these examples from
+    // the documented schema: placeholders like "string" and 0 are expected, and
+    // "Unknown Type: date-time" is the generator's text, not data. When the site's schema
+    // changes, refresh the example from the page.
+
+    // https://trade-api.bcs.ru/http/limits/ — GET /trade-api-bff-limit/api/v1/limits
     [Fact]
-    public void BcsLimitsResponse_PostmanSnippet_Deserializes()
+    public void BcsLimitsResponse_DocumentedExample_Deserializes()
     {
-        var limits = DeserializePostmanOkResponse<BcsLimitsResponse>("trade-api-bff-limit/api/v1/limits");
+        const string json = """
+        {
+          "depoLimit": [
+            {
+              "ticker": "string",
+              "classCode": "string",
+              "exchange": "string",
+              "averagePrice": 0,
+              "quantity": {
+                "type": "T0",
+                "value": 0
+              },
+              "quantityBatch": {
+                "type": "T0",
+                "value": 0
+              },
+              "instrumentType": "string",
+              "loadDate": "2024-07-29T15:51:28.071Z",
+              "lockedBuyValue": 0,
+              "lockedSellValue": 0,
+              "lockedBuyQuantity": 0,
+              "lockedSellQuantity": 0
+            }
+          ],
+          "futureHolding": [
+            {
+              "ticker": "string",
+              "classCode": "string",
+              "exchange": "string",
+              "cbplPlanned": 0,
+              "varMargin": 0,
+              "positionValue": 0,
+              "totalNet": 0,
+              "executionDate": "2024-07-29T15:51:28.071Z",
+              "totalVarMargin": 0,
+              "realVarMargin": 0,
+              "averagePrice": 0,
+              "instrumentType": "string",
+              "tradeDate": "2024-07-29T15:51:28.071Z"
+            }
+          ],
+          "moneyLimits": [
+            {
+              "exchange": "string",
+              "currencyCode": "string",
+              "locked": 0,
+              "averagePrice": 0,
+              "instrumentType": "string",
+              "quantity": {
+                "type": "T0",
+                "value": 0
+              },
+              "loadDate": "2024-07-29T15:51:28.071Z"
+            }
+          ],
+          "futuresLimits": [
+            {
+              "currencyCode": "string",
+              "exchange": "string",
+              "accruedint": 0,
+              "cbpLimit": 0,
+              "cbplUsed": 0,
+              "cbplPlanned": 0,
+              "cbplUsedForOrders": 0,
+              "cbplUsedForPositions": 0,
+              "optionsPremium": 0,
+              "instrumentType": "string",
+              "loadDate": "2024-07-29T15:51:28.071Z",
+              "varMargin": 0,
+              "realVarMargin": 0
+            }
+          ]
+        }
+        """;
+        var exampleTime = new DateTimeOffset(2024, 7, 29, 15, 51, 28, 71, TimeSpan.Zero);
 
-        Assert.Equal(5, limits.DepoLimit.Count);
+        var limits = Deserialize<BcsLimitsResponse>(json);
 
-        var depoLimit = limits.DepoLimit[0];
-        Assert.Equal("APTK", depoLimit.Ticker);
-        Assert.Equal("TQBR", depoLimit.ClassCode);
-        Assert.Equal(8.476222m, depoLimit.AveragePrice);
-        Assert.Equal(-90m, depoLimit.Quantity?.Value);
-        Assert.Equal(new DateTimeOffset(2026, 2, 2, 21, 0, 0, TimeSpan.Zero), depoLimit.LoadDate);
+        var depoLimit = Assert.Single(limits.DepoLimit);
+        Assert.Equal("string", depoLimit.Ticker);
+        Assert.Equal("string", depoLimit.ClassCode);
+        Assert.Equal(0m, depoLimit.AveragePrice);
+        Assert.Equal("T0", depoLimit.Quantity?.Type);
+        Assert.Equal(0m, depoLimit.Quantity?.Value);
+        Assert.Equal("T0", depoLimit.QuantityBatch?.Type);
+        Assert.Equal(exampleTime, depoLimit.LoadDate);
+        Assert.Equal(0m, depoLimit.LockedSellQuantity);
 
-        Assert.Empty(limits.FutureHolding);
-        Assert.Equal(3, limits.MoneyLimits.Count);
-        Assert.Empty(limits.FuturesLimits);
+        var futureHolding = Assert.Single(limits.FutureHolding);
+        Assert.Equal(0m, futureHolding.CbplPlanned);
+        Assert.Equal(exampleTime, futureHolding.ExecutionDate);
+        Assert.Equal(exampleTime, futureHolding.TradeDate);
+
+        var moneyLimit = Assert.Single(limits.MoneyLimits);
+        Assert.Equal("string", moneyLimit.CurrencyCode);
+        Assert.Equal(0m, moneyLimit.Locked);
+        Assert.Equal("T0", moneyLimit.Quantity?.Type);
+        Assert.Equal(exampleTime, moneyLimit.LoadDate);
+
+        var futuresLimit = Assert.Single(limits.FuturesLimits);
+        Assert.Equal(0m, futuresLimit.AccruedInt);
+        Assert.Equal(0m, futuresLimit.CbplUsedForPositions);
+        Assert.Equal(0m, futuresLimit.RealVarMargin);
+        Assert.Equal(exampleTime, futuresLimit.LoadDate);
     }
 
+    // https://trade-api.bcs.ru/http/portfolio/ — GET /trade-api-bff-portfolio/api/v1/portfolio
     [Fact]
-    public void BcsPortfolioItem_PostmanSnippet_Deserializes()
+    public void BcsPortfolioItem_DocumentedExample_Deserializes()
     {
-        var portfolio = DeserializePostmanOkResponse<List<BcsPortfolioItem>>(
-            "trade-api-bff-portfolio/api/v1/portfolio");
+        const string json = """
+        [
+          {
+            "type": "moneyLimit",
+            "account": "string",
+            "exchange": "string",
+            "ticker": "string",
+            "displayName": "string",
+            "baseAssetTicker": "string",
+            "currency": "string",
+            "upperType": "CURRENCY",
+            "instrumentType": "string",
+            "term": "T0",
+            "quantity": 0,
+            "locked": 0,
+            "balancePrice": 0,
+            "currentPrice": 0,
+            "balanceValue": 0,
+            "balanceValueRub": 0,
+            "balanceValueUsd": 0,
+            "balanceValueEur": 0,
+            "currentValue": 0,
+            "currentValueRub": 0,
+            "currentValueUsd": 0,
+            "currentValueEur": 0,
+            "unrealizedPL": 0,
+            "unrealizedPercentPL": 0,
+            "dailyPL": 0,
+            "dailyPercentPL": 0,
+            "portfolioShare": 0,
+            "scale": 0,
+            "minimumStep": 0,
+            "board": "string",
+            "priceUnit": "string",
+            "faceValue": 0,
+            "accruedIncome": 0,
+            "logoLink": "string",
+            "isBlocked": true,
+            "isBlockedTradeAccount": true,
+            "lockedForFutures": 0,
+            "ratioQuantity": 0,
+            "expireDate": "string"
+          }
+        ]
+        """;
 
-        Assert.NotEmpty(portfolio);
+        var portfolio = Deserialize<List<BcsPortfolioItem>>(json);
 
-        var item = portfolio[0];
+        var item = Assert.Single(portfolio);
         Assert.Equal("moneyLimit", item.Type);
-        Assert.Equal("RUB", item.Ticker);
-        Assert.Equal(1061.32m, item.Quantity);
+        Assert.Equal("string", item.Account);
+        Assert.Equal("CURRENCY", item.UpperType);
+        Assert.Equal("T0", item.Term);
+        Assert.Equal(0m, item.Quantity);
         Assert.Equal(0m, item.UnrealizedPL);
         Assert.Equal(0m, item.UnrealizedPercentPL);
         Assert.Equal(0m, item.DailyPL);
         Assert.Equal(0m, item.DailyPercentPL);
-        Assert.False(item.IsBlocked);
+        Assert.Equal(0m, item.FaceValue);
+        Assert.True(item.IsBlocked);
+        Assert.True(item.IsBlockedTradeAccount);
+        Assert.Equal(0m, item.RatioQuantity);
+        Assert.Equal("string", item.ExpireDate);
     }
 
+    // https://trade-api.bcs.ru/http/information/get-daily-schedule/ —
+    // GET /trade-api-information-service/api/v1/trading-schedule/daily-schedule
     [Fact]
-    public void BcsDailyTradingScheduleResponse_PostmanSnippet_Deserializes()
+    public void BcsDailyTradingScheduleResponse_DocumentedExample_Deserializes()
     {
-        var schedule = DeserializePostmanOkResponse<BcsDailyTradingScheduleResponse>(
-            "trading-schedule/daily-schedule");
+        const string json = """
+        {
+          "isWorkDay": true,
+          "dailySchedule": [
+            {
+              "startDate": "14:30:00",
+              "endDate": "14:30:00",
+              "tradingSessionType": "Технический перерыв QUIK",
+              "tradingSessionStatus": "OPEN"
+            }
+          ]
+        }
+        """;
+
+        var schedule = Deserialize<BcsDailyTradingScheduleResponse>(json);
 
         Assert.Equal(true, schedule.IsWorkDay);
 
-        var entry = schedule.DailySchedule[0];
-        Assert.Equal(new TimeOnly(16, 5, 0), entry.StartDate);
-        Assert.Equal(new TimeOnly(20, 50, 0), entry.EndDate);
+        var entry = Assert.Single(schedule.DailySchedule);
+        Assert.Equal(new TimeOnly(14, 30, 0), entry.StartDate);
+        Assert.Equal(new TimeOnly(14, 30, 0), entry.EndDate);
+        Assert.Equal("Технический перерыв QUIK", entry.TradingSessionType);
         Assert.Equal("OPEN", entry.TradingSessionStatus);
     }
 
+    // https://trade-api.bcs.ru/http/market-data/get-candles-chart/ —
+    // GET /trade-api-market-data-connector/api/v1/candles-chart
     [Fact]
-    public void BcsCandlesResponse_PostmanSnippet_Deserializes()
+    public void BcsCandlesResponse_DocumentedExample_Deserializes()
     {
-        var candles = DeserializePostmanOkResponse<BcsCandlesResponse>("candles-chart");
+        const string json = """
+        {
+          "ticker": "SBER",
+          "classCode": "TQBR",
+          "startDate": "2025-11-14T07:00:00Z",
+          "endDate": "2025-11-14T10:00:00Z",
+          "timeFrame": "H1",
+          "bars": [
+            {
+              "time": "2024-07-29T15:51:28.071Z",
+              "open": 0,
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "volume": 0
+            }
+          ]
+        }
+        """;
 
-        Assert.Equal("GAZP", candles.Ticker);
+        var candles = Deserialize<BcsCandlesResponse>(json);
+
+        Assert.Equal("SBER", candles.Ticker);
         Assert.Equal("TQBR", candles.ClassCode);
-        Assert.Equal(new DateTimeOffset(2025, 7, 16, 3, 59, 0, TimeSpan.Zero), candles.StartDate);
-        Assert.Equal(new DateTimeOffset(2025, 7, 16, 20, 49, 0, TimeSpan.Zero), candles.EndDate);
+        Assert.Equal(new DateTimeOffset(2025, 11, 14, 7, 0, 0, TimeSpan.Zero), candles.StartDate);
+        Assert.Equal(new DateTimeOffset(2025, 11, 14, 10, 0, 0, TimeSpan.Zero), candles.EndDate);
+        Assert.Equal("H1", candles.TimeFrame);
 
-        var bar = candles.Bars[0];
-        Assert.Equal(new DateTimeOffset(2025, 7, 16, 20, 49, 0, TimeSpan.Zero), bar.Time);
-        Assert.Equal(122.68m, bar.Open);
-        Assert.Equal(122.83m, bar.Close);
-        Assert.Equal(122.83m, bar.High);
-        Assert.Equal(122.63m, bar.Low);
-        Assert.Equal(9030444.7m, bar.Volume);
+        var bar = Assert.Single(candles.Bars);
+        Assert.Equal(new DateTimeOffset(2024, 7, 29, 15, 51, 28, 71, TimeSpan.Zero), bar.Time);
+        Assert.Equal(0m, bar.Open);
+        Assert.Equal(0m, bar.Close);
+        Assert.Equal(0m, bar.High);
+        Assert.Equal(0m, bar.Low);
+        Assert.Equal(0m, bar.Volume);
     }
 
+    // https://trade-api.bcs.ru/http/information/get-instruments-by-isins/ —
+    // POST /trade-api-information-service/api/v1/instruments/by-isins
     [Fact]
-    public void BcsInstrument_PostmanSnippet_Deserializes()
+    public void BcsInstrument_DocumentedExample_Deserializes()
     {
-        var instruments = DeserializePostmanOkResponse<List<BcsInstrument>>("instruments/by-isins");
+        const string json = """
+        [
+          {
+            "ticker": "string",
+            "boards": [
+              {
+                "classCode": "TQBR",
+                "exchange": "MOEX"
+              }
+            ],
+            "shortName": "string",
+            "displayName": "string",
+            "type": "CURRENCY",
+            "isin": "string",
+            "registrationCode": "string",
+            "issuerName": "string",
+            "tradingCurrency": "string",
+            "faceValue": 0,
+            "scale": 0,
+            "minimumStep": 0,
+            "accruedInt": 0,
+            "currencyStepPrice": "string",
+            "settleCode": "string",
+            "instrumentType": "CURRENCY",
+            "settlementCurrency": "string",
+            "settlementDate": "2024-07-29T15:51:28.071Z",
+            "maturityDate": "Unknown Type: date-time",
+            "lotSize": 0,
+            "isQualifiedOnly": true,
+            "isCanShort": true,
+            "baseAsset": "string",
+            "qualifiedTestId": 0,
+            "qualifiedTestIdTm": 0,
+            "availableForUnqualified": true,
+            "currencyNominal": "string",
+            "stepPrice": 0,
+            "isBcsProduct": true,
+            "couponsPerYear": 0,
+            "couponRate": 0,
+            "nextCoupon": "2024-07-29T15:51:28.071Z",
+            "complexProduct": 0,
+            "baseAssetFuture": "string",
+            "subType": "string",
+            "percentTargetCurrent": 0,
+            "businessSector": "string",
+            "peNorm": 0,
+            "priceTangible": 0,
+            "epsGrowthRate": 0,
+            "predictedDps": 0,
+            "dividendYield": 0,
+            "priceChangeYear": 0,
+            "targetPrice": 0,
+            "mktcap": 0,
+            "isBlocked": true,
+            "businessSectorId": 0,
+            "primaryBoard": "string",
+            "secondaryBoards": [
+              "string"
+            ],
+            "isCanMargin": true,
+            "isReplacementBond": true,
+            "subTitle": "string",
+            "couponTypeName": "string",
+            "emissionDate": "Unknown Type: date-time",
+            "creditRating": "string",
+            "liquidityRating": "string",
+            "bcsScore": 0,
+            "bcsScoreColor": "string",
+            "nrdCode": "string",
+            "strike": 0,
+            "baseAssetSecuritySecCode": "string",
+            "baseAssetSecurityClassCode": "string",
+            "businessCountry": "string",
+            "businessCountryCode": "string",
+            "priceChangeHalfYear": 0,
+            "priceChangeMonth": 0,
+            "priceChangeEarlyYear": 0,
+            "firstCurrCode": "string",
+            "amortisedMty": true
+          }
+        ]
+        """;
 
-        var instrument = Assert.Single(instruments, instrument => instrument.BcsScore == 4);
-        Assert.Equal("GAZP", instrument.Ticker);
-        Assert.Equal("RU0007661625", instrument.Isin);
+        var instruments = Deserialize<List<BcsInstrument>>(json);
+
+        var instrument = Assert.Single(instruments);
+        Assert.Equal("string", instrument.Ticker);
+        var board = Assert.Single(instrument.Boards);
+        Assert.Equal("TQBR", board.ClassCode);
+        Assert.Equal("MOEX", board.Exchange);
+        Assert.Equal("CURRENCY", instrument.Type);
+        Assert.Equal("CURRENCY", instrument.InstrumentType);
+        Assert.Equal("string", instrument.Isin);
         Assert.Equal(0m, instrument.AccruedInt);
-        Assert.Equal(4, instrument.BcsScore);
-        Assert.Equal("yellow", instrument.BcsScoreColor);
-        Assert.Equal(3030209651200m, instrument.Mktcap);
-        Assert.False(instrument.AmortisedMty);
+        Assert.Equal(0m, instrument.LotSize);
+        Assert.Equal("2024-07-29T15:51:28.071Z", instrument.SettlementDate);
+        Assert.Equal(0, instrument.BcsScore);
+        Assert.Equal("string", instrument.BcsScoreColor);
+        Assert.Equal(0m, instrument.Mktcap);
+        Assert.Equal("string", Assert.Single(instrument.SecondaryBoards));
+        Assert.True(instrument.AmortisedMty);
     }
 
+    // https://trade-api.bcs.ru/http/operations/all-order-list/ —
+    // POST /trade-api-bff-order-details/api/v1/orders/search
     [Fact]
-    public void BcsOrdersSearchResponse_PostmanSnippet_Deserializes()
+    public void BcsOrdersSearchResponse_DocumentedExample_Deserializes()
     {
-        var orders = DeserializePostmanOkResponse<BcsOrdersSearchResponse>("orders/search");
+        const string json = """
+        {
+          "records": [
+            {
+              "orderNum": 0,
+              "orderId": "string",
+              "clientCode": "string",
+              "executionDateTime": "2024-07-29T15:51:28.071Z",
+              "executedValue": 0,
+              "orderDateTime": "2024-07-29T15:51:28.071Z",
+              "tradeDate": "2024-07-29",
+              "updateDateTime": "2024-07-29T15:51:28.071Z",
+              "ticker": "string",
+              "classCode": "string",
+              "takePrice": 0,
+              "stopPrice": 0,
+              "price": 0,
+              "settlementCurrency": "string",
+              "orderQuantity": 0,
+              "remainedQuantity": 0,
+              "executedQuantity": 0,
+              "rejectReason": "string",
+              "averagePrice": 0,
+              "calculationVolume": 0,
+              "contractSum": 0,
+              "orderStatus": 1,
+              "orderType": 1,
+              "side": 1,
+              "orderQuantityLots": 0,
+              "remainedQuantityLots": 0,
+              "executedQuantityLots": 0,
+              "linkedOrder": "string",
+              "stopOrder": "string",
+              "visible": 0,
+              "marketTakeProfit": 1,
+              "marketStopLoss": 1,
+              "positionPriceStop": 0,
+              "positionPriceLimit": 0
+            }
+          ],
+          "totalRecords": 0,
+          "totalPages": 0
+        }
+        """;
+        var exampleTime = new DateTimeOffset(2024, 7, 29, 15, 51, 28, 71, TimeSpan.Zero);
 
-        Assert.Empty(orders.Records);
+        var orders = Deserialize<BcsOrdersSearchResponse>(json);
+
         Assert.Equal(0, orders.TotalRecords);
         Assert.Equal(0, orders.TotalPages);
+
+        var order = Assert.Single(orders.Records);
+        Assert.Equal(0, order.OrderNum);
+        Assert.Equal("string", order.OrderId);
+        Assert.Equal(exampleTime, order.ExecutionDateTime);
+        Assert.Equal(new DateOnly(2024, 7, 29), order.TradeDate);
+        Assert.Equal(exampleTime, order.UpdateDateTime);
+        Assert.Equal(0m, order.OrderQuantity);
+        Assert.Equal(BcsOrderStatus.Canceled, order.OrderStatus);
+        Assert.Equal(BcsOrderType.Market, order.OrderType);
+        Assert.Equal(BcsOrderSide.Buy, order.Side);
+        Assert.Equal(0m, order.ExecutedQuantityLots);
+        Assert.Equal(1, order.MarketTakeProfit);
+        Assert.Equal(0m, order.PositionPriceLimit);
     }
 
-    private static T DeserializePostmanOkResponse<T>(string urlFragment)
-    {
-        var json = GetPostmanOkResponseBody(urlFragment);
-        return JsonSerializer.Deserialize<T>(json, BcsJson.SerializerOptions)
-            ?? throw new JsonException($"Postman response for '{urlFragment}' deserialized to null.");
-    }
-
-    private static string GetPostmanOkResponseBody(string urlFragment)
-    {
-        using var collection = JsonDocument.Parse(File.ReadAllText(FindPostmanCollectionPath()));
-
-        foreach (var item in EnumerateItems(collection.RootElement.GetProperty("item")))
-        {
-            if (!TryGetRawUrl(item, out var rawUrl)
-                || !rawUrl.Contains(urlFragment, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!item.TryGetProperty("response", out var responses))
-            {
-                continue;
-            }
-
-            foreach (var response in responses.EnumerateArray())
-            {
-                if (response.TryGetProperty("code", out var code)
-                    && code.GetInt32() == 200
-                    && response.TryGetProperty("body", out var body))
-                {
-                    return body.GetString()
-                        ?? throw new JsonException($"Postman response for '{urlFragment}' has a null body.");
-                }
-            }
-        }
-
-        throw new InvalidOperationException($"200 OK Postman response was not found for '{urlFragment}'.");
-    }
-
-    private static IEnumerable<JsonElement> EnumerateItems(JsonElement items)
-    {
-        foreach (var item in items.EnumerateArray())
-        {
-            yield return item;
-
-            if (!item.TryGetProperty("item", out var childItems))
-            {
-                continue;
-            }
-
-            foreach (var childItem in EnumerateItems(childItems))
-            {
-                yield return childItem;
-            }
-        }
-    }
-
-    private static bool TryGetRawUrl(JsonElement item, out string rawUrl)
-    {
-        rawUrl = string.Empty;
-        if (!item.TryGetProperty("request", out var request)
-            || !request.TryGetProperty("url", out var url)
-            || !url.TryGetProperty("raw", out var raw))
-        {
-            return false;
-        }
-
-        rawUrl = raw.GetString() ?? string.Empty;
-        return rawUrl.Length > 0;
-    }
-
-    private static string FindPostmanCollectionPath()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var directPath = Path.Combine(directory.FullName, "HTTP.postman_collection.json");
-            if (File.Exists(directPath))
-            {
-                return directPath;
-            }
-
-            var docsPath = Path.Combine(directory.FullName, "Docs", "HTTP.postman_collection.json");
-            if (File.Exists(docsPath))
-            {
-                return docsPath;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("HTTP.postman_collection.json was not found.");
-    }
+    private static T Deserialize<T>(string json) =>
+        JsonSerializer.Deserialize<T>(json, BcsJson.SerializerOptions)
+            ?? throw new JsonException($"{typeof(T).Name} example deserialized to null.");
 }
