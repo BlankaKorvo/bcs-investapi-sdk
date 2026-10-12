@@ -58,7 +58,7 @@ public sealed record BcsOrder
 
     public BcsOrderStatus? OrderStatus { get; init; }
 
-    public BcsOrderType? OrderType { get; init; }
+    public BcsSearchOrderType? OrderType { get; init; }
 
     public BcsOrderSide? Side { get; init; }
 

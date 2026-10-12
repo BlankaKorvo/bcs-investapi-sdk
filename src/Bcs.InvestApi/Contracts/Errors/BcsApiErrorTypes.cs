@@ -14,4 +14,10 @@ public static class BcsApiErrorTypes
     public const string SessionNotFoundError = "SESSION_NOT_FOUND_ERROR";
     public const string SessionExpiredError = "SESSION_EXPIRED_ERROR";
     public const string SessionFailedError = "SESSION_FAILED_ERROR";
+
+    /// <summary>Candles: the requested period holds more candles than one request may return.</summary>
+    public const string CandleLimitExceeded = "CANDLE_LIMIT_EXCEEDED";
+
+    /// <summary>Order methods: the user is not found.</summary>
+    public const string UserNotFound = "USER_NOT_FOUND";
 }

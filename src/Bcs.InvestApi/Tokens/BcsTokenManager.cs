@@ -202,7 +202,7 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
         var response = await _authService.GetAccessTokenAsync(
             new BcsAuthRequest
             {
-                ClientId = _settings.ClientId,
+                ClientId = _settings.GetRequiredClientId(),
                 RefreshToken = refreshToken,
                 GrantType = BcsGrantTypes.RefreshToken,
             },

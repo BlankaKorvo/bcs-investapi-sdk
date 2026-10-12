@@ -3,6 +3,8 @@ namespace Bcs.InvestApi.Tests.Orders;
 using System.Net;
 using Bcs.InvestApi;
 using Bcs.InvestApi.Contracts.Enums;
+using Bcs.InvestApi.Contracts.Errors;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Contracts.Orders;
 using Bcs.InvestApi.Infrastructure;
 using Bcs.InvestApi.Services;
@@ -36,7 +38,7 @@ public sealed class BcsOrdersServiceTests
             {
                 ClientOrderId = clientOrderId,
                 Side = BcsOrderSide.Buy,
-                OrderType = BcsOrderType.Limit,
+                OrderType = BcsCreateOrderType.Limit,
                 OrderQuantity = 10,
                 Ticker = "APTK",
                 ClassCode = "TQBR",
@@ -58,42 +60,80 @@ public sealed class BcsOrdersServiceTests
         Assert.Equal("OK", response.Status);
     }
 
+    // Order status by the method's response schema (https://trade-api.bcs.ru/http/operations/get-order-by-id):
+    // the site has no ready response example for HTTP methods, only the schema; every field of a report is filled.
     [Fact]
-    public async Task GetOrderStatusAsync_SendsGetAndDeserializesResponse()
+    public async Task GetOrderStatusAsync_ByClientOrderId_SendsGetWithQueryAndDeserializesReports()
     {
         const string statusJson = """
         {
-          "clientOrderId": "12345678-1234-1234-9adb-123456789876",
-          "originalClientOrderId": "",
-          "data": {
-            "messageType": "8",
-            "orderStatus": "0",
-            "executionType": "0",
-            "orderQuantity": 10,
-            "executedQuantity": 0,
-            "lastQuantity": 0,
-            "remainedQuantity": 10,
-            "ticker": "APTK",
-            "classCode": "TQBR",
-            "side": "1",
-            "orderType": "2",
-            "averagePrice": 0,
-            "orderId": "260204-TQBR-11111111111",
-            "executionId": "260204-TQBR-1234567-0-8rtGl",
-            "price": 8.572,
-            "currency": "RUB",
-            "clientCode": "2230377",
-            "transactionTime": "2026-02-04T10:10:54.530Z",
-            "orderNumber": "11111111111",
-            "accruedCoupon": 0,
-            "executionValue": 0,
-            "commission": 0,
-            "securityExchange": "TQBR"
-          }
+          "clientOrderId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+          "originalClientOrderId": "12345678-1234-1234-9adb-123456789876",
+          "data": [
+            {
+              "messageType": "8",
+              "orderStatus": "0",
+              "executionType": "0",
+              "orderQuantity": 10,
+              "executedQuantity": 0,
+              "lastQuantity": 0,
+              "remainedQuantity": 10,
+              "ticker": "SBER",
+              "classCode": "TQBR",
+              "side": "1",
+              "orderType": "2",
+              "averagePrice": 0,
+              "orderId": "20260501-TQBR-79628540663",
+              "price": 300.5,
+              "currency": "RUB",
+              "clientCode": "123456",
+              "transactionTime": "2026-05-01T07:00:00.000Z",
+              "tradeDate": "2026-05-01",
+              "orderNumber": "79628540663",
+              "commission": 0,
+              "securityExchange": "TQBR",
+              "timeInForce": 1
+            },
+            {
+              "messageType": "8",
+              "orderStatus": "2",
+              "executionType": "2",
+              "orderQuantity": 10,
+              "executedQuantity": 10,
+              "lastQuantity": 10,
+              "remainedQuantity": 0,
+              "ticker": "SBER",
+              "classCode": "TQBR",
+              "side": "1",
+              "orderType": "2",
+              "averagePrice": 300.25,
+              "orderId": "20260501-TQBR-79628540663",
+              "executionId": "TQBR-Z3fE7c-S-1-1-N",
+              "price": 300.5,
+              "currency": "RUB",
+              "clientCode": "123456",
+              "transactionTime": "2026-05-01T07:00:01.250Z",
+              "tradeDate": "2026-05-01",
+              "orderNumber": "79628540663",
+              "accruedCoupon": 1.5,
+              "executionValue": 3002.5,
+              "commission": 1.2,
+              "securityExchange": "TQBR",
+              "rejectReason": "",
+              "timeInForce": 3,
+              "expiryDate": "20260530",
+              "stopPrice": 290.5,
+              "takePrice": 310.5,
+              "visible": 4,
+              "spread": 0.5,
+              "spreadType": 0,
+              "offset": 1.5,
+              "offsetType": 1
+            }
+          ]
         }
         """;
 
-        var clientOrderId = Guid.Parse("12345678-1234-1234-9adb-123456789876");
         var handler = new CapturingHttpMessageHandler((_, _) =>
             Task.FromResult(JsonResponse(HttpStatusCode.OK, statusJson)));
         var service = new BcsOrdersService(
@@ -102,43 +142,334 @@ public sealed class BcsOrdersServiceTests
             new StaticTokenProvider("access-token-1"),
             new BcsHttpRequestSender());
 
-        var response = await service.GetOrderStatusAsync(clientOrderId, TestContext.Current.CancellationToken);
+        var response = await service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest?.Method);
         Assert.Equal(
-            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders/12345678-1234-1234-9adb-123456789876"),
+            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders?orderIdType=1&orderId=12345678-1234-1234-9adb-123456789876"),
             handler.LastRequest?.RequestUri);
         Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
         Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
         Assert.Null(handler.LastRequestContent);
-        Assert.Equal("12345678-1234-1234-9adb-123456789876", response.ClientOrderId);
-        Assert.Equal("", response.OriginalClientOrderId);
+        Assert.Equal("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", response.ClientOrderId);
+        Assert.Equal("12345678-1234-1234-9adb-123456789876", response.OriginalClientOrderId);
+        Assert.Equal(2, response.Data.Count);
 
-        Assert.NotNull(response.Data);
-        var data = response.Data;
-        Assert.Equal("8", data.MessageType);
-        Assert.Equal("0", data.OrderStatus);
-        Assert.Equal("0", data.ExecutionType);
-        Assert.Equal(10m, data.OrderQuantity);
-        Assert.Equal(0m, data.ExecutedQuantity);
-        Assert.Equal(0m, data.LastQuantity);
-        Assert.Equal(10m, data.RemainedQuantity);
-        Assert.Equal("APTK", data.Ticker);
-        Assert.Equal("TQBR", data.ClassCode);
-        Assert.Equal("1", data.Side);
-        Assert.Equal("2", data.OrderType);
-        Assert.Equal(0m, data.AveragePrice);
-        Assert.Equal("260204-TQBR-11111111111", data.OrderId);
-        Assert.Equal("260204-TQBR-1234567-0-8rtGl", data.ExecutionId);
-        Assert.Equal(8.572m, data.Price);
-        Assert.Equal("RUB", data.Currency);
-        Assert.Equal("2230377", data.ClientCode);
-        Assert.Equal(new DateTimeOffset(2026, 02, 04, 10, 10, 54, 530, TimeSpan.Zero), data.TransactionTime);
-        Assert.Equal("11111111111", data.OrderNumber);
-        Assert.Equal(0m, data.AccruedCoupon);
-        Assert.Equal(0m, data.ExecutionValue);
-        Assert.Equal(0m, data.Commission);
-        Assert.Equal("TQBR", data.SecurityExchange);
+        var accepted = response.Data[0];
+        Assert.Equal("0", accepted.OrderStatus);
+        Assert.Equal("0", accepted.ExecutionType);
+        Assert.Equal(0m, accepted.ExecutedQuantity);
+        Assert.Null(accepted.ExecutionId);
+        Assert.Equal(1, accepted.TimeInForce);
+        Assert.Null(accepted.ExpiryDate);
+
+        var filled = response.Data[1];
+        Assert.Equal("8", filled.MessageType);
+        Assert.Equal("2", filled.OrderStatus);
+        Assert.Equal("2", filled.ExecutionType);
+        Assert.Equal(10m, filled.OrderQuantity);
+        Assert.Equal(10m, filled.ExecutedQuantity);
+        Assert.Equal(10m, filled.LastQuantity);
+        Assert.Equal(0m, filled.RemainedQuantity);
+        Assert.Equal("SBER", filled.Ticker);
+        Assert.Equal("TQBR", filled.ClassCode);
+        Assert.Equal("1", filled.Side);
+        Assert.Equal("2", filled.OrderType);
+        Assert.Equal(300.25m, filled.AveragePrice);
+        Assert.Equal("20260501-TQBR-79628540663", filled.OrderId);
+        Assert.Equal("TQBR-Z3fE7c-S-1-1-N", filled.ExecutionId);
+        Assert.Equal(300.5m, filled.Price);
+        Assert.Equal("RUB", filled.Currency);
+        Assert.Equal("123456", filled.ClientCode);
+        Assert.Equal(new DateTimeOffset(2026, 05, 01, 07, 00, 01, 250, TimeSpan.Zero), filled.TransactionTime);
+        Assert.Equal(new DateOnly(2026, 05, 01), filled.TradeDate);
+        Assert.Equal("79628540663", filled.OrderNumber);
+        Assert.Equal(1.5m, filled.AccruedCoupon);
+        Assert.Equal(3002.5m, filled.ExecutionValue);
+        Assert.Equal(1.2m, filled.Commission);
+        Assert.Equal("TQBR", filled.SecurityExchange);
+        Assert.Equal("", filled.RejectReason);
+        Assert.Equal(3, filled.TimeInForce);
+        Assert.Equal("20260530", filled.ExpiryDate);
+        Assert.Equal(290.5m, filled.StopPrice);
+        Assert.Equal(310.5m, filled.TakePrice);
+        Assert.Equal(4, filled.Visible);
+        Assert.Equal(0.5m, filled.Spread);
+        Assert.Equal(0, filled.SpreadType);
+        Assert.Equal(1.5m, filled.Offset);
+        Assert.Equal(1, filled.OffsetType);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_ByExchangeOrderId_SendsTheIdentifierWithType2()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee","data":[]}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.GetOrderStatusAsync(
+            BcsOrderIdType.ExchangeOrderId,
+            "20260501-TQBR-79628540663",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders?orderIdType=2&orderId=20260501-TQBR-79628540663"),
+            handler.LastRequest?.RequestUri);
+        Assert.Empty(response.Data);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_ClientOrderId_IsSentInCanonicalForm()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee","data":[]}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "{12345678-1234-1234-9ADB-123456789876}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders?orderIdType=1&orderId=12345678-1234-1234-9adb-123456789876"),
+            handler.LastRequest?.RequestUri);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_OrderNotFound_Throws404WithTheApiError()
+    {
+        const string notFoundJson = """
+        {
+          "timestamp": 1777618800000,
+          "traceId": "trace-404",
+          "type": "NOT_FOUND",
+          "errors": [],
+          "displayOptions": {}
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.NotFound, notFoundJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.Equal("order-status", exception.Endpoint);
+        Assert.Equal(BcsApiErrorTypes.NotFound, exception.ApiError?.Type);
+        Assert.Equal("trace-404", exception.ApiError?.TraceId);
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Theory]
+    [InlineData("not-a-uuid")]
+    [InlineData("20260501-TQBR-79628540663")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task GetOrderStatusAsync_ClientOrderIdNotAUuid_ThrowsBeforeAnyRequest(string orderId)
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.GetOrderStatusAsync(BcsOrderIdType.ClientOrderId, orderId, TestContext.Current.CancellationToken));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(BcsOrderIdType.ClientOrderId, null)]
+    [InlineData(BcsOrderIdType.ClientOrderId, "")]
+    [InlineData(BcsOrderIdType.ExchangeOrderId, " ")]
+    public async Task GetOrderStatusAsync_WithNullOrWhitespaceOrderId_Throws(BcsOrderIdType orderIdType, string? orderId)
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            service.GetOrderStatusAsync(orderIdType, orderId!, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_WithUnsupportedOrderIdType_Throws()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.GetOrderStatusAsync((BcsOrderIdType)3, "20260501-TQBR-79628540663", TestContext.Current.CancellationToken));
+    }
+
+    // Synchronous creation answers in the order-status format
+    // (https://trade-api.bcs.ru/http/operations/sync/create-order-sync), by the method's response schema.
+    [Fact]
+    public async Task CreateOrderSyncAsync_PostsTheCreationBodyAndDeserializesTheOrderState()
+    {
+        const string stateJson = """
+        {
+          "clientOrderId": "12345678-1234-1234-1234-123456789123",
+          "originalClientOrderId": "12345678-1234-1234-1234-123456789123",
+          "data": [
+            {
+              "messageType": "8",
+              "orderStatus": "8",
+              "executionType": "8",
+              "orderQuantity": 10,
+              "executedQuantity": 0,
+              "lastQuantity": 0,
+              "remainedQuantity": 0,
+              "ticker": "APTK",
+              "classCode": "TQBR",
+              "side": "1",
+              "orderType": "2",
+              "averagePrice": 0,
+              "orderId": "20260501-TQBR-79628540664",
+              "price": 9.53,
+              "currency": "RUB",
+              "transactionTime": "2026-05-01T07:00:00.000Z",
+              "tradeDate": "2026-05-01",
+              "rejectReason": "Trading is closed",
+              "timeInForce": 1
+            }
+          ]
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, stateJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.CreateOrderSyncAsync(CreateOrderRequest(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
+        Assert.Equal(
+            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders/sync"),
+            handler.LastRequest?.RequestUri);
+        Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
+        Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            """{"clientOrderId":"12345678-1234-1234-1234-123456789123","side":"1","orderType":"2","orderQuantity":10,"ticker":"APTK","classCode":"TQBR","price":9.530}""",
+            handler.LastRequestContent);
+        Assert.Equal("12345678-1234-1234-1234-123456789123", response.ClientOrderId);
+        var report = Assert.Single(response.Data);
+        Assert.Equal("8", report.OrderStatus);
+        Assert.Equal("Trading is closed", report.RejectReason);
+        Assert.Equal("20260501-TQBR-79628540664", report.OrderId);
+    }
+
+    [Fact]
+    public async Task CreateOrderSyncAsync_ValidatesTheRequestLikeCreation()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            service.CreateOrderSyncAsync(null!, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CreateOrderSyncAsync(CreateOrderRequest() with { ClientOrderId = Guid.Empty }, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.CreateOrderSyncAsync(CreateOrderRequest() with { OrderType = (BcsCreateOrderType)4 }, TestContext.Current.CancellationToken));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    // BUG-26: creation and the order list number order types differently; each request carries its own codes.
+    [Theory]
+    [InlineData(BcsCreateOrderType.Market, "1")]
+    [InlineData(BcsCreateOrderType.Limit, "2")]
+    public async Task CreateOrderAsync_SendsTheCreationCodeOfTheOrderType(BcsCreateOrderType orderType, string code)
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-1234-1234-1234-123456789123","status":"OK"}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.CreateOrderAsync(CreateOrderRequest() with { OrderType = orderType }, TestContext.Current.CancellationToken);
+
+        Assert.Contains($"\"orderType\":\"{code}\"", handler.LastRequestContent);
+    }
+
+    [Theory]
+    [InlineData(BcsSearchOrderType.Market, 1)]
+    [InlineData(BcsSearchOrderType.Limit, 2)]
+    [InlineData(BcsSearchOrderType.Iceberg, 3)]
+    [InlineData(BcsSearchOrderType.StopLimit, 4)]
+    [InlineData(BcsSearchOrderType.TakeProfitWithLimitOrder, 5)]
+    [InlineData(BcsSearchOrderType.StopLoss, 6)]
+    [InlineData(BcsSearchOrderType.TakeProfitAndStopLoss, 7)]
+    [InlineData(BcsSearchOrderType.LimitForThirtyDays, 10)]
+    [InlineData(BcsSearchOrderType.TakeProfit, 11)]
+    public async Task SearchOrdersAsync_SendsTheListCodeOfTheOrderType(BcsSearchOrderType orderType, int code)
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"records":[],"totalRecords":0,"totalPages":0}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        await service.SearchOrdersAsync(
+            new BcsOrdersSearchRequest { OrderTypes = new[] { orderType } },
+            page: 0,
+            size: 50,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal($"{{\"orderTypes\":[{code}]}}", handler.LastRequestContent);
+    }
+
+    [Fact]
+    public async Task SearchOrdersAsync_RecordOrderType_IsReadAsTheListType()
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"records":[{"orderType":3},{"orderType":11}],"totalRecords":2,"totalPages":1}""")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var orders = await service.SearchOrdersAsync(
+            new BcsOrdersSearchRequest(),
+            page: 0,
+            size: 50,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new BcsSearchOrderType?[] { BcsSearchOrderType.Iceberg, BcsSearchOrderType.TakeProfit },
+            orders.Records.Select(order => order.OrderType));
     }
 
     [Fact]
@@ -204,7 +535,7 @@ public sealed class BcsOrdersServiceTests
                 EndDateTime = new DateTimeOffset(2024, 07, 30, 15, 51, 28, 071, TimeSpan.Zero),
                 Side = BcsOrderSide.Buy,
                 OrderStatus = new[] { BcsOrderStatus.Executed, BcsOrderStatus.Active },
-                OrderTypes = new[] { BcsOrderType.Limit, BcsOrderType.LimitForThirtyDays },
+                OrderTypes = new[] { BcsSearchOrderType.Limit, BcsSearchOrderType.LimitForThirtyDays },
                 Tickers = new[] { " SBER ", "GAZP" },
                 ClassCodes = new[] { "TQBR" },
             },
@@ -250,7 +581,7 @@ public sealed class BcsOrdersServiceTests
         Assert.Equal(3012.5m, order.CalculationVolume);
         Assert.Equal(3012.5m, order.ContractSum);
         Assert.Equal(BcsOrderStatus.Executed, order.OrderStatus);
-        Assert.Equal(BcsOrderType.Limit, order.OrderType);
+        Assert.Equal(BcsSearchOrderType.Limit, order.OrderType);
         Assert.Equal(BcsOrderSide.Buy, order.Side);
         Assert.Equal(1m, order.OrderQuantityLots);
         Assert.Equal(0m, order.RemainedQuantityLots);
@@ -310,7 +641,7 @@ public sealed class BcsOrdersServiceTests
             {
                 ClientOrderId = clientOrderId,
                 Side = BcsOrderSide.Buy,
-                OrderType = BcsOrderType.Market,
+                OrderType = BcsCreateOrderType.Market,
                 OrderQuantity = 10,
                 Ticker = "APTK",
                 ClassCode = "TQBR",
@@ -341,13 +672,25 @@ public sealed class BcsOrdersServiceTests
             service.CreateOrderAsync(CreateOrderRequest() with { Side = (BcsOrderSide)999 }, TestContext.Current.CancellationToken));
     }
 
-    [Fact]
-    public async Task CreateOrderAsync_WithUnsupportedOrderType_Throws()
+    // BUG-26: codes 3-5 are other order types in creation than in the list; the SDK does not send them.
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(999)]
+    public async Task CreateOrderAsync_WithUnsupportedOrderType_ThrowsBeforeAnyRequest(int orderType)
     {
-        var service = CreateService();
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, "{}")));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            service.CreateOrderAsync(CreateOrderRequest() with { OrderType = (BcsOrderType)999 }, TestContext.Current.CancellationToken));
+            service.CreateOrderAsync(CreateOrderRequest() with { OrderType = (BcsCreateOrderType)orderType }, TestContext.Current.CancellationToken));
+        Assert.Equal(0, handler.RequestCount);
     }
 
     [Theory]
@@ -372,169 +715,6 @@ public sealed class BcsOrdersServiceTests
 
         await Assert.ThrowsAnyAsync<ArgumentException>(() =>
             service.CreateOrderAsync(CreateOrderRequest() with { ClassCode = classCode! }, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task GetOrderStatusAsync_WithEmptyClientOrderId_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.GetOrderStatusAsync(Guid.Empty, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task CancelOrderAsync_PostsJsonBodyAndDeserializesResponse()
-    {
-        const string cancelJson = """
-        {
-          "clientOrderId": "12345678-1234-1234-1234-123456789123",
-          "status": "OK"
-        }
-        """;
-
-        var originalClientOrderId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        var clientOrderId = Guid.Parse("12345678-1234-1234-1234-123456789123");
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, cancelJson)));
-        var service = new BcsOrdersService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        var response = await service.CancelOrderAsync(originalClientOrderId, clientOrderId, TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/cancel"),
-            handler.LastRequest?.RequestUri);
-        Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
-        Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
-        Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
-        Assert.Equal("""{"clientOrderId":"12345678-1234-1234-1234-123456789123"}""", handler.LastRequestContent);
-        Assert.Equal(clientOrderId, response.ClientOrderId);
-        Assert.Equal("OK", response.Status);
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_PostsJsonBodyAndDeserializesResponse()
-    {
-        const string updateJson = """
-        {
-          "clientOrderId": "12345678-b805-478a-ad1c-123456765432",
-          "status": "OK"
-        }
-        """;
-
-        var originalClientOrderId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        var clientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432");
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, updateJson)));
-        var service = new BcsOrdersService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        var response = await service.UpdateOrderAsync(
-            originalClientOrderId,
-            new BcsUpdateOrderRequest
-            {
-                ClientOrderId = clientOrderId,
-                OrderQuantity = 10,
-                Price = 9.540m,
-            },
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
-        Assert.Equal(
-            new Uri("https://example.test/trade-api-bff-operations/api/v1/orders/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-            handler.LastRequest?.RequestUri);
-        Assert.Equal("Bearer", handler.LastRequest?.Headers.Authorization?.Scheme);
-        Assert.Equal("access-token-1", handler.LastRequest?.Headers.Authorization?.Parameter);
-        Assert.Equal("application/json", handler.LastRequest?.Content?.Headers.ContentType?.MediaType);
-        Assert.Equal(
-            """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","price":9.540,"orderQuantity":10}""",
-            handler.LastRequestContent);
-        Assert.Equal(clientOrderId, response.ClientOrderId);
-        Assert.Equal("OK", response.Status);
-    }
-
-    [Fact]
-    public async Task CancelOrderAsync_WithEmptyOriginalClientOrderId_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CancelOrderAsync(Guid.Empty, Guid.Parse("12345678-1234-1234-1234-123456789123"), TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task CancelOrderAsync_WithEmptyClientOrderId_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.CancelOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), Guid.Empty, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_WithoutPrice_OmitsPriceFromBody()
-    {
-        var originalClientOrderId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        var clientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432");
-        var handler = new CapturingHttpMessageHandler((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","status":"OK"}""")));
-        var service = new BcsOrdersService(
-            CreateSettings(),
-            new HttpClient(handler),
-            new StaticTokenProvider("access-token-1"),
-            new BcsHttpRequestSender());
-
-        await service.UpdateOrderAsync(
-            originalClientOrderId,
-            new BcsUpdateOrderRequest
-            {
-                ClientOrderId = clientOrderId,
-                OrderQuantity = 10,
-                // Price intentionally omitted; docs mark price as optional.
-            },
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            """{"clientOrderId":"12345678-b805-478a-ad1c-123456765432","orderQuantity":10}""",
-            handler.LastRequestContent);
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_WithEmptyOriginalClientOrderId_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.UpdateOrderAsync(Guid.Empty, CreateUpdateOrderRequest(), TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_WithNullRequest_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentNullException>(() =>
-            service.UpdateOrderAsync(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), null!, TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task UpdateOrderAsync_WithEmptyClientOrderId_Throws()
-    {
-        var service = CreateService();
-
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.UpdateOrderAsync(
-                Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-                CreateUpdateOrderRequest() with { ClientOrderId = Guid.Empty },
-                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -610,14 +790,17 @@ public sealed class BcsOrdersServiceTests
                 cancellationToken: TestContext.Current.CancellationToken));
     }
 
-    [Fact]
-    public async Task SearchOrdersAsync_WithUnsupportedOrderType_Throws()
+    // BUG-26: TrailingStop (12) is not a documented order type.
+    [Theory]
+    [InlineData(12)]
+    [InlineData(999)]
+    public async Task SearchOrdersAsync_WithUnsupportedOrderType_Throws(int orderType)
     {
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             service.SearchOrdersAsync(
-                new BcsOrdersSearchRequest { OrderTypes = new[] { (BcsOrderType)999 } },
+                new BcsOrdersSearchRequest { OrderTypes = new[] { (BcsSearchOrderType)orderType } },
                 page: 0,
                 size: 50,
                 cancellationToken: TestContext.Current.CancellationToken));
@@ -688,19 +871,11 @@ public sealed class BcsOrdersServiceTests
         {
             ClientOrderId = Guid.Parse("12345678-1234-1234-1234-123456789123"),
             Side = BcsOrderSide.Buy,
-            OrderType = BcsOrderType.Limit,
+            OrderType = BcsCreateOrderType.Limit,
             OrderQuantity = 10,
             Ticker = "APTK",
             ClassCode = "TQBR",
             Price = 9.530m,
-        };
-
-    private static BcsUpdateOrderRequest CreateUpdateOrderRequest() =>
-        new()
-        {
-            ClientOrderId = Guid.Parse("12345678-b805-478a-ad1c-123456765432"),
-            OrderQuantity = 10,
-            Price = 9.540m,
         };
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>

@@ -30,20 +30,12 @@ public static class BcsWebSocketEndpoints
         new("wss://ws.broker.ru/trade-api-market-data-connector/api/v1/market-data/ws");
 
     /// <summary>
-    /// Streams order execution status updates in real time. Each message matches the HTTP
-    /// order-status payload (<see cref="Contracts.Orders.BcsOrderStatusResponse"/>).
+    /// Streams order status updates in real time. Each message carries one order report
+    /// (<see cref="Contracts.Orders.BcsOrderEventMessage"/>, <c>data</c> is an object).
     /// No subscribe message is required; the server pushes updates after connect.
     /// </summary>
-    public static readonly Uri OrderExecutions =
-        new("wss://ws.broker.ru/trade-api-bff-operations/api/v1/orders/execution/ws");
-
-    /// <summary>
-    /// Streams order transaction status updates in real time. Each message matches the HTTP
-    /// order-status payload (<see cref="Contracts.Orders.BcsOrderStatusResponse"/>).
-    /// No subscribe message is required; the server pushes updates after connect.
-    /// </summary>
-    public static readonly Uri OrderTransactions =
-        new("wss://ws.broker.ru/trade-api-bff-operations/api/v1/orders/transaction/ws");
+    public static readonly Uri OrderEvents =
+        new("wss://ws.broker.ru/trade-api-bff-operations/api/v1/orders/events/ws");
 
     /// <summary>
     /// Streams a real-time margin indicators snapshot

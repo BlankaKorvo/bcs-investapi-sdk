@@ -22,23 +22,17 @@ if (string.IsNullOrWhiteSpace(refreshToken))
 var classCode = GetEnvOrDefault("BCS_SAMPLE_CLASS_CODE", "TQBR");
 var ticker = GetEnvOrDefault("BCS_SAMPLE_TICKER", "SBER");
 
-Guid? orderStatusClientOrderId;
+(BcsOrderIdType Type, string Id)? orderStatusConfig;
 BcsCreateOrderRequest? createOrderRequest;
-(Guid OriginalId, BcsUpdateOrderRequest Request)? updateOrderConfig;
-(Guid OriginalId, Guid ClientOrderId)? cancelOrderConfig;
+bool createOrderSync;
 BcsAuthClientIds clientId;
 
 try
 {
-    orderStatusClientOrderId = ParseOptionalGuid("BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID");
+    orderStatusConfig = BuildOrderStatusConfig();
     createOrderRequest = BuildCreateOrderRequest(ticker, classCode);
-    updateOrderConfig = BuildUpdateOrderConfig();
-    cancelOrderConfig = BuildCancelOrderConfig();
-
-    var writeOperationEnabled = createOrderRequest is not null
-        || updateOrderConfig is not null
-        || cancelOrderConfig is not null;
-    clientId = GetConfiguredClientId(writeOperationEnabled);
+    createOrderSync = IsEnabled("BCS_SAMPLE_CREATE_ORDER_SYNC");
+    clientId = GetConfiguredClientId(writeOperationEnabled: createOrderRequest is not null);
 }
 catch (InvalidOperationException ex)
 {
@@ -59,10 +53,8 @@ await ShowTradingScheduleAsync(client, classCode, ticker);
 await ShowOrdersAsync(client, classCode, ticker);
 await ShowTradesAsync(client);
 await ShowMarginDiscountsAsync(client);
-await ShowOrderStatusAsync(client, orderStatusClientOrderId);
-await ShowCreateOrderAsync(client, createOrderRequest);
-await ShowUpdateOrderAsync(client, updateOrderConfig);
-await ShowCancelOrderAsync(client, cancelOrderConfig);
+await ShowOrderStatusAsync(client, orderStatusConfig);
+await ShowCreateOrderAsync(client, createOrderRequest, createOrderSync);
 
 // ---------------------------------------------------------------------------
 // WebSocket streams. Each is opt-in via a BCS_SAMPLE_STREAM_* environment flag.
@@ -189,30 +181,30 @@ static async Task ShowMarginDiscountsAsync(BcsInvestApiClient client)
     }
 }
 
-static async Task ShowOrderStatusAsync(BcsInvestApiClient client, Guid? orderStatusClientOrderId)
+static async Task ShowOrderStatusAsync(BcsInvestApiClient client, (BcsOrderIdType Type, string Id)? orderStatusConfig)
 {
-    if (orderStatusClientOrderId is not { } statusId)
+    if (orderStatusConfig is not { } config)
     {
-        Console.WriteLine("Order status skipped. Set BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID to enable it.");
+        Console.WriteLine("Order status skipped. Set BCS_SAMPLE_ORDER_STATUS_ID (and BCS_SAMPLE_ORDER_STATUS_ID_TYPE) to enable it.");
         return;
     }
 
-    var status = await client.Orders.GetOrderStatusAsync(statusId);
-    Console.WriteLine(
-        $"Order status: clientOrderId={status.ClientOrderId}, originalClientOrderId={status.OriginalClientOrderId}");
-    if (status.Data is { } data)
-    {
-        Console.WriteLine(
-            $"  {data.TransactionTime:O}: {data.Ticker}/{data.ClassCode} status={data.OrderStatus} " +
-            $"execType={data.ExecutionType} qty={data.OrderQuantity} remained={data.RemainedQuantity} price={data.Price}");
-    }
+    var status = await client.Orders.GetOrderStatusAsync(config.Type, config.Id);
+    PrintOrderStatus("Order status", status);
 }
 
-static async Task ShowCreateOrderAsync(BcsInvestApiClient client, BcsCreateOrderRequest? createOrderRequest)
+static async Task ShowCreateOrderAsync(BcsInvestApiClient client, BcsCreateOrderRequest? createOrderRequest, bool sync)
 {
     if (createOrderRequest is null)
     {
-        Console.WriteLine("Order create skipped. Set BCS_SAMPLE_CREATE_ORDER=true, BCS_SAMPLE_CREATE_ORDER_QUANTITY, and BCS_SAMPLE_CREATE_PRICE to enable it.");
+        Console.WriteLine("Order create skipped. Set BCS_SAMPLE_CREATE_ORDER=true and BCS_SAMPLE_CREATE_ORDER_QUANTITY (and BCS_SAMPLE_CREATE_PRICE for a limit order) to enable it.");
+        return;
+    }
+
+    if (sync)
+    {
+        var state = await client.Orders.CreateOrderSyncAsync(createOrderRequest);
+        PrintOrderStatus("Create order (sync) result", state);
         return;
     }
 
@@ -220,28 +212,17 @@ static async Task ShowCreateOrderAsync(BcsInvestApiClient client, BcsCreateOrder
     Console.WriteLine($"Create order result: clientOrderId={response.ClientOrderId}, status={response.Status}");
 }
 
-static async Task ShowUpdateOrderAsync(BcsInvestApiClient client, (Guid OriginalId, BcsUpdateOrderRequest Request)? updateOrderConfig)
+static void PrintOrderStatus(string label, BcsOrderStatusResponse status)
 {
-    if (updateOrderConfig is not { } config)
+    Console.WriteLine(
+        $"{label}: clientOrderId={status.ClientOrderId}, originalClientOrderId={status.OriginalClientOrderId}, reports={status.Data.Count}");
+    foreach (var data in status.Data)
     {
-        Console.WriteLine("Order update skipped. Set BCS_SAMPLE_UPDATE_ORIGINAL_CLIENT_ORDER_ID, BCS_SAMPLE_UPDATE_ORDER_QUANTITY, and BCS_SAMPLE_UPDATE_PRICE to enable it.");
-        return;
+        Console.WriteLine(
+            $"  {data.TransactionTime:O}: {data.Ticker}/{data.ClassCode} status={data.OrderStatus} " +
+            $"execType={data.ExecutionType} qty={data.OrderQuantity} executed={data.ExecutedQuantity} " +
+            $"remained={data.RemainedQuantity} avgPrice={data.AveragePrice}");
     }
-
-    var response = await client.Orders.UpdateOrderAsync(config.OriginalId, config.Request);
-    Console.WriteLine($"Update order result: clientOrderId={response.ClientOrderId}, status={response.Status}");
-}
-
-static async Task ShowCancelOrderAsync(BcsInvestApiClient client, (Guid OriginalId, Guid ClientOrderId)? cancelOrderConfig)
-{
-    if (cancelOrderConfig is not { } config)
-    {
-        Console.WriteLine("Order cancel skipped. Set BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID to enable it.");
-        return;
-    }
-
-    var response = await client.Orders.CancelOrderAsync(config.OriginalId, config.ClientOrderId);
-    Console.WriteLine($"Cancel order result: clientOrderId={response.ClientOrderId}, status={response.Status}");
 }
 
 // ===========================================================================
@@ -331,19 +312,11 @@ static async Task RunStreamSamplesAsync(BcsInvestApiClient client, string classC
             maxMessages: 3,
             positions => $"{positions.Length} positions"));
 
-    await RunIfEnabledAsync("BCS_SAMPLE_STREAM_ORDER_EXECUTIONS", "order-execution", () =>
-        RunPushStreamAsync<BcsOrderStatusResponse>(
+    await RunIfEnabledAsync("BCS_SAMPLE_STREAM_ORDER_EVENTS", "order-events", () =>
+        RunPushStreamAsync<BcsOrderEventMessage>(
             client,
-            BcsWebSocketEndpoints.OrderExecutions,
-            "order-execution",
-            maxMessages: 5,
-            update => $"clientOrderId={update.ClientOrderId} original={update.OriginalClientOrderId} status={update.Data?.OrderStatus}"));
-
-    await RunIfEnabledAsync("BCS_SAMPLE_STREAM_ORDER_TRANSACTIONS", "order-transaction", () =>
-        RunPushStreamAsync<BcsOrderStatusResponse>(
-            client,
-            BcsWebSocketEndpoints.OrderTransactions,
-            "order-transaction",
+            BcsWebSocketEndpoints.OrderEvents,
+            "order-events",
             maxMessages: 5,
             update => $"clientOrderId={update.ClientOrderId} original={update.OriginalClientOrderId} status={update.Data?.OrderStatus}"));
 
@@ -479,6 +452,23 @@ static BcsAuthClientIds GetConfiguredClientId(bool writeOperationEnabled)
     };
 }
 
+static (BcsOrderIdType Type, string Id)? BuildOrderStatusConfig()
+{
+    var id = Environment.GetEnvironmentVariable("BCS_SAMPLE_ORDER_STATUS_ID");
+    if (string.IsNullOrWhiteSpace(id))
+    {
+        return null;
+    }
+
+    var type = ParseEnumOrDefault("BCS_SAMPLE_ORDER_STATUS_ID_TYPE", BcsOrderIdType.ClientOrderId);
+    if (type == BcsOrderIdType.ClientOrderId && !Guid.TryParse(id, out _))
+    {
+        throw new InvalidOperationException("BCS_SAMPLE_ORDER_STATUS_ID must be a valid UUID when BCS_SAMPLE_ORDER_STATUS_ID_TYPE is ClientOrderId.");
+    }
+
+    return (type, id.Trim());
+}
+
 static BcsCreateOrderRequest? BuildCreateOrderRequest(string ticker, string classCode)
 {
     if (!IsEnabled("BCS_SAMPLE_CREATE_ORDER"))
@@ -486,45 +476,17 @@ static BcsCreateOrderRequest? BuildCreateOrderRequest(string ticker, string clas
         return null;
     }
 
+    var orderType = ParseEnumOrDefault("BCS_SAMPLE_CREATE_ORDER_TYPE", BcsCreateOrderType.Limit);
     return new BcsCreateOrderRequest
     {
         ClientOrderId = ParseGuidWithDefault("BCS_SAMPLE_CREATE_CLIENT_ORDER_ID", Guid.NewGuid),
         Side = ParseEnumOrDefault("BCS_SAMPLE_CREATE_SIDE", BcsOrderSide.Buy),
-        OrderType = ParseEnumOrDefault("BCS_SAMPLE_CREATE_ORDER_TYPE", BcsOrderType.Limit),
+        OrderType = orderType,
         OrderQuantity = ParseRequiredPositiveInt64("BCS_SAMPLE_CREATE_ORDER_QUANTITY"),
-        Price = ParseRequiredPositiveDecimal("BCS_SAMPLE_CREATE_PRICE"),
+        Price = orderType == BcsCreateOrderType.Limit ? ParseRequiredPositiveDecimal("BCS_SAMPLE_CREATE_PRICE") : null,
         Ticker = ticker,
         ClassCode = classCode,
     };
-}
-
-static (Guid OriginalId, BcsUpdateOrderRequest Request)? BuildUpdateOrderConfig()
-{
-    var originalId = ParseOptionalGuid("BCS_SAMPLE_UPDATE_ORIGINAL_CLIENT_ORDER_ID");
-    if (originalId is null)
-    {
-        return null;
-    }
-
-    var request = new BcsUpdateOrderRequest
-    {
-        ClientOrderId = ParseGuidWithDefault("BCS_SAMPLE_UPDATE_CLIENT_ORDER_ID", Guid.NewGuid),
-        OrderQuantity = ParseRequiredPositiveInt64("BCS_SAMPLE_UPDATE_ORDER_QUANTITY"),
-        Price = ParseRequiredPositiveDecimal("BCS_SAMPLE_UPDATE_PRICE"),
-    };
-
-    return (originalId.Value, request);
-}
-
-static (Guid OriginalId, Guid ClientOrderId)? BuildCancelOrderConfig()
-{
-    var originalId = ParseOptionalGuid("BCS_SAMPLE_CANCEL_ORIGINAL_CLIENT_ORDER_ID");
-    if (originalId is null)
-    {
-        return null;
-    }
-
-    return (originalId.Value, ParseGuidWithDefault("BCS_SAMPLE_CANCEL_CLIENT_ORDER_ID", Guid.NewGuid));
 }
 
 static string GetEnvOrDefault(string variableName, string defaultValue)
@@ -547,22 +509,6 @@ static bool IsEnabled(string variableName)
         "0" or "false" or "no" or "off" => false,
         _ => throw new InvalidOperationException($"{variableName} must be one of: 1/0, true/false, yes/no, on/off."),
     };
-}
-
-static Guid? ParseOptionalGuid(string variableName)
-{
-    var rawValue = Environment.GetEnvironmentVariable(variableName);
-    if (string.IsNullOrWhiteSpace(rawValue))
-    {
-        return null;
-    }
-
-    if (!Guid.TryParse(rawValue, out var value))
-    {
-        throw new InvalidOperationException($"{variableName} must be a valid UUID.");
-    }
-
-    return value;
 }
 
 static Guid ParseGuidWithDefault(string variableName, Func<Guid> defaultFactory)

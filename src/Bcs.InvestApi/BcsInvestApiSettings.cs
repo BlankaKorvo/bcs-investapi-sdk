@@ -17,9 +17,11 @@ public sealed class BcsInvestApiSettings
     public string? RefreshToken { get; set; }
 
     /// <summary>
-    /// BCS auth client id. Supported values map to trade-api-read and trade-api-write.
+    /// BCS auth client id: <see cref="BcsAuthClientIds.TradeApiRead"/> (trade-api-read) or
+    /// <see cref="BcsAuthClientIds.TradeApiWrite"/> (trade-api-write). Required, no default: the client id
+    /// decides whether the session may trade, so the host states it explicitly.
     /// </summary>
-    public BcsAuthClientIds ClientId { get; set; } = BcsAuthClientIds.TradeApiWrite;
+    public BcsAuthClientIds? ClientId { get; set; }
 
     /// <summary>
     /// Full Keycloak token endpoint URL.
@@ -130,9 +132,22 @@ public sealed class BcsInvestApiSettings
         }
     }
 
+    internal BcsAuthClientIds GetRequiredClientId()
+    {
+        ValidateAuthClientId();
+
+        return ClientId!.Value;
+    }
+
     internal void ValidateAuthClientId()
     {
-        _ = ClientId.ToApiValue();
+        if (ClientId is not { } clientId)
+        {
+            throw new InvalidOperationException(
+                "BCS auth client id is not configured. Set Bcs:ClientId to TradeApiRead or TradeApiWrite.");
+        }
+
+        _ = clientId.ToApiValue();
     }
 
     internal void ValidateRefreshToken()

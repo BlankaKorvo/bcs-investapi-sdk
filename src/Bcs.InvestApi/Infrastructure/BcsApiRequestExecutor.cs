@@ -1,7 +1,6 @@
 namespace Bcs.InvestApi.Infrastructure;
 
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Bcs.InvestApi.Contracts.Errors;
 using Bcs.InvestApi.Contracts.Exceptions;
@@ -107,8 +106,9 @@ internal sealed class BcsApiRequestExecutor
             .ReadAsStringAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (response.StatusCode == HttpStatusCode.Unauthorized &&
-            IsInvalidToken(response))
+        // Any 401 drops the access token: BCS documents no challenge header, and keeping a
+        // rejected token would send it again until it expires (24 h).
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             _tokens.InvalidateAccessToken(accessToken);
         }
@@ -157,34 +157,5 @@ internal sealed class BcsApiRequestExecutor
             || error.DisplayOptions is not null;
 
         return hasContent ? error : null;
-    }
-
-    private static bool IsInvalidToken(HttpResponseMessage response) =>
-        response.Headers.WwwAuthenticate.Any(IsInvalidTokenChallenge);
-
-    private static bool IsInvalidTokenChallenge(AuthenticationHeaderValue challenge)
-    {
-        if (!string.Equals(challenge.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(challenge.Parameter))
-        {
-            return false;
-        }
-
-        return challenge.Parameter
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(IsInvalidTokenParameter);
-    }
-
-    private static bool IsInvalidTokenParameter(string parameter)
-    {
-        const string prefix = "error=";
-
-        if (!parameter.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var value = parameter[prefix.Length..].Trim().Trim('"');
-        return string.Equals(value, "invalid_token", StringComparison.Ordinal);
     }
 }

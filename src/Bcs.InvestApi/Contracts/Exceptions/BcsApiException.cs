@@ -8,10 +8,9 @@ using Bcs.InvestApi.Contracts.Errors;
 /// </summary>
 /// <remarks>
 /// The SDK does not retry. When <see cref="StatusCode"/> is
-/// <see cref="HttpStatusCode.Unauthorized"/> with a <c>WWW-Authenticate: Bearer error="invalid_token"</c>
-/// challenge, the cached access token is dropped before this exception is thrown, so the failing call
-/// still surfaces the 401 but the next call transparently obtains a fresh token. Deciding whether to
-/// retry that next call is the caller's responsibility.
+/// <see cref="HttpStatusCode.Unauthorized"/>, the cached access token is dropped before this exception
+/// is thrown, so the failing call still surfaces the 401 but the next call transparently obtains a
+/// fresh token. Deciding whether to retry that next call is the caller's responsibility.
 /// </remarks>
 public sealed class BcsApiException : Exception
 {

@@ -236,6 +236,133 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(errorJson, exception.ResponseBody);
     }
 
+    // The documentation names no WWW-Authenticate challenge for a rejected token: any 401 drops it,
+    // otherwise the rejected token would be sent again until it expires (24 h).
+    [Fact]
+    public async Task GetLimitsAsync_UnauthorizedWithoutChallengeHeader_InvalidatesAccessTokenWithoutRetry()
+    {
+        const string unauthorizedJson = """
+        {
+          "timestamp": 1777618800000,
+          "traceId": "trace-401",
+          "type": "UNAUTHORIZED",
+          "errors": [],
+          "displayOptions": {}
+        }
+        """;
+
+        var settings = CreateSettings();
+        var authRefreshTokens = new List<string>();
+        var limitAccessTokens = new List<string?>();
+        var handler = new CapturingHttpMessageHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri == AuthUrl)
+            {
+                authRefreshTokens.Add(await ReadFormValueAsync(
+                    request,
+                    "refresh_token",
+                    cancellationToken));
+
+                return JsonResponse(
+                    HttpStatusCode.OK,
+                    authRefreshTokens.Count == 1
+                        ? AuthResponseJson("access-1", "runtime-refresh-2")
+                        : AuthResponseJson("access-2", "runtime-refresh-3"));
+            }
+
+            if (request.RequestUri == LimitsUrl)
+            {
+                limitAccessTokens.Add(request.Headers.Authorization?.Parameter);
+
+                return limitAccessTokens.Count == 1
+                    ? JsonResponse(HttpStatusCode.Unauthorized, unauthorizedJson)
+                    : JsonResponse(HttpStatusCode.OK, "{}");
+            }
+
+            throw new InvalidOperationException($"Unexpected request URI '{request.RequestUri}'.");
+        });
+
+        using var httpClient = new HttpClient(handler);
+        await using var tokens = CreateTokenManager(settings, httpClient);
+        var service = new BcsLimitsService(settings, httpClient, tokens, CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
+        Assert.Equal(BcsApiErrorTypes.Unauthorized, exception.ApiError?.Type);
+        Assert.Equal(new[] { "access-1" }, limitAccessTokens);
+        Assert.Equal(2, handler.RequestCount);
+
+        await service.GetLimitsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(new[] { "access-1", "access-2" }, limitAccessTokens);
+        Assert.Equal(new[] { "settings-refresh-1", "runtime-refresh-2" }, authRefreshTokens);
+        Assert.Equal(4, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetCandlesAsync_CandleLimitExceeded_IsParsedAsTheDocumentedErrorType()
+    {
+        const string errorJson = """
+        {
+          "timestamp": 1777618800000,
+          "traceId": "trace-candles",
+          "type": "CANDLE_LIMIT_EXCEEDED",
+          "errors": [],
+          "displayOptions": {}
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.BadRequest, errorJson)));
+        var service = new BcsMarketDataService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetCandlesAsync(
+            "TQBR",
+            "SBER",
+            new DateTimeOffset(2026, 05, 01, 7, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 05, 02, 7, 0, 0, TimeSpan.Zero),
+            BcsCandleTimeFrames.Minute1,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("CANDLE_LIMIT_EXCEEDED", BcsApiErrorTypes.CandleLimitExceeded);
+        Assert.Equal(BcsApiErrorTypes.CandleLimitExceeded, exception.ApiError?.Type);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusAsync_UserNotFound_IsParsedAsTheDocumentedErrorType()
+    {
+        const string errorJson = """
+        {
+          "timestamp": 1777618800000,
+          "traceId": "trace-user",
+          "type": "USER_NOT_FOUND",
+          "errors": [],
+          "displayOptions": {}
+        }
+        """;
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.NotFound, errorJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("USER_NOT_FOUND", BcsApiErrorTypes.UserNotFound);
+        Assert.Equal(BcsApiErrorTypes.UserNotFound, exception.ApiError?.Type);
+    }
+
     private static IBcsHttpSender CreateReadSender() =>
         new BcsHttpRequestSender();
 

@@ -5,9 +5,13 @@ using Bcs.InvestApi.Services;
 
 public static class BcsInvestApiClientFactory
 {
+    /// <summary>
+    /// Creates a client for <paramref name="refreshToken"/> with the explicit auth
+    /// <paramref name="clientId"/> (there is no default: it decides whether the client may trade).
+    /// </summary>
     public static BcsInvestApiClient Create(
         string refreshToken,
-        BcsAuthClientIds clientId = BcsAuthClientIds.TradeApiRead,
+        BcsAuthClientIds clientId,
         HttpMessageHandler? httpMessageHandler = null)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
@@ -31,6 +35,7 @@ public static class BcsInvestApiClientFactory
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateRefreshToken();
+        settings.ValidateAuthClientId();
         settings.ValidateTokenTimings();
         settings.ValidateWebSocketKeepAlive();
 

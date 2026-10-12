@@ -53,12 +53,20 @@ net10.0
 | `Instruments.GetInstrumentsByTypeAsync` | `GET /trade-api-information-service/api/v1/instruments/by-type` |
 | `MarketData.GetCandlesAsync` | `GET /trade-api-market-data-connector/api/v1/candles-chart` |
 | `Orders.CreateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders` |
-| `Orders.GetOrderStatusAsync` | `GET /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
+| `Orders.CreateOrderSyncAsync` | `POST /trade-api-bff-operations/api/v1/orders/sync` |
+| `Orders.GetOrderStatusAsync` | `GET /trade-api-bff-operations/api/v1/orders?orderIdType=&orderId=` |
 | `Orders.SearchOrdersAsync` | `POST /trade-api-bff-order-details/api/v1/orders/search` |
-| `Orders.UpdateOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}` |
-| `Orders.CancelOrderAsync` | `POST /trade-api-bff-operations/api/v1/orders/{originalClientOrderId}/cancel` |
 | `Trades.SearchTradesAsync` | `POST /trade-api-bff-trade-details/api/v1/trades/search` |
 | `MarginalIndicators.GetInstrumentsDiscountsAsync` | `GET /trade-api-bff-marginal-indicators/api/v1/instruments-discounts` |
+
+Устаревшие у BCS методы заявок (статус по пути `/orders/{originalClientOrderId}`, изменение и отмена по этому пути; часть BCS удалит 31.01.2027) в SDK не входят. Новые отмена и изменение заявки (`/orders/cancel`, `/orders/edit` и их синхронные варианты) не реализованы.
+
+### Заявки
+
+- `CreateOrderAsync` — асинхронное создание: ответ только подтверждает приём запроса (`clientOrderId`, `status`).
+- `CreateOrderSyncAsync` — синхронное создание: BCS дожидается итога обработки и отвечает состоянием заявки в формате статуса (`BcsOrderStatusResponse`). Тело запроса то же, что у `CreateOrderAsync`.
+- `GetOrderStatusAsync(orderIdType, orderId)` — статус заявки по виду идентификатора: `BcsOrderIdType.ClientOrderId` (`1`) — UUID, с которым заявка создана (не UUID и пустой UUID — `ArgumentException` до запроса); `BcsOrderIdType.ExchangeOrderId` (`2`) — биржевой номер `ГГММДД-КодКласса-НомерЗаявки`. `Data` — массив отчётов о заявке. Заявки нет — `BcsApiException` с кодом 404.
+- Типы заявки у создания и у списка заявок закодированы по-разному, поэтому это разные перечисления: `BcsCreateOrderType` (создание: `Market` = `1`, `Limit` = `2`; коды `3`–`5` — алгоритмическая GTD, айсберг и условная — требуют полей, которых `BcsCreateOrderRequest` не содержит, и SDK их не отправляет) и `BcsSearchOrderType` (фильтр и записи `SearchOrdersAsync`: `1`–`7`, `10`, `11`).
 
 ## WebSocket-потоки
 
@@ -67,8 +75,8 @@ SDK предоставляет только инфраструкцию ауте�
 - `WebSockets.ConnectAsync(Uri url, CancellationToken)` открывает аутентифицированный `ClientWebSocket` (свежий Bearer-токен при каждом вызове).
 - `WebSockets.ConnectAndSubscribeAsync(url, subscribeMessage, ct)` открывает сокет и отправляет содержимое подписки в первом кадре (для потоков, требующих явной подписки, например рыночные данные).
 - `WebSocket.SendJsonMessageAsync(message, ct)` сериализует и отправляет один текстовый кадр с JSON-параметрами SDK (содержимое подписки/отписки).
-- `WebSocket.ReceiveJsonMessageAsync<T>(ct)` считывает одно логическое сообщение; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` передаёт их как `IAsyncEnumerable<T>` до чистого закрытия или отмены.
-- `BcsWebSocketEndpoints` предоставляет известные URL потоков (например, `BcsWebSocketEndpoints.Limits`).
+- `WebSocket.ReceiveJsonMessageAsync<T>(ct)` считывает одно логическое сообщение; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` передаёт их как `IAsyncEnumerable<T>` до чистого закрытия или отмены — единственный способ читать поток сообщений.
+- `BcsWebSocketEndpoints` предоставляет известные URL потоков: `Limits`, `Portfolio`, `MarketData`, `OrderEvents`, `MarginalIndicators`. Поток статусов заявок `OrderEvents` (`orders/events/ws`) — пуш без подписки, сообщение `BcsOrderEventMessage` с одним отчётом о заявке в `data`; устаревшие потоки `orders/execution/ws` и `orders/transaction/ws` в SDK не входят.
 - Полезные данные потоков используют контрактные типы HTTP (например, поток лимитов возвращает `BcsLimitsResponse`).
 
 Пуш-поток (сообщение подписки не требуется):
@@ -128,7 +136,7 @@ API- endpoints формируются относительно `BcsInvestApiSett
 | Настройка | По умолчанию | Описание |
 |---|---|---|
 | `RefreshToken` | требуется | Стабильный внешний секрет обновления/загрузки, предоставленный хостом/слоем приложения. |
-| `ClientId` | `BcsAuthClientIds.TradeApiRead` | Перечисление идентификатора клиента BCS. Значения соответствуют `trade-api-read` или `trade-api-write`. |
+| `ClientId` | требуется, умолчания нет | Идентификатор клиента BCS: `BcsAuthClientIds.TradeApiRead` (`trade-api-read`) или `BcsAuthClientIds.TradeApiWrite` (`trade-api-write`). От него зависит, может ли клиент торговать, поэтому хост задаёт его явно; не задан — `InvalidOperationException` при создании клиента. У `BcsInvestApiClientFactory.Create(refreshToken, clientId, ...)` параметр тоже обязателен. |
 | `AuthUrl` | Конечная точка токена BCS | Полный URL конечной точки Keycloak. Должен быть абсолютным HTTPS, если локальный небезопасный HTTP не разрешён явно. |
 | `BaseUrl` | `https://be.broker.ru` | Базовый URL для API-ендпоинтов BCS. Должен быть абсолютным HTTPS, если локальный небезопасный HTTP не разрешён явно. |
 | `AllowInsecureHttpForTesting` | `false` | Разрешает небезопасные HTTP-URL только для явных локальных тестов. |
@@ -141,6 +149,8 @@ API- endpoints формируются относительно `BcsInvestApiSett
 SDK хранит пару runtime-токенов в частном состоянии в памяти. Хост предоставляет один стабильный внешний секрет обновления/загрузки через `BcsInvestApiSettings.RefreshToken` или `BcsInvestApiClientFactory.Create(...)`.
 
 Перед каждым запросом к брокерскому API SDK внутренне получает рабочий access-токен. Первый авторизованный запрос использует настроенный внешний секрет. Успешная авторизация обновляет пару токенов в памяти. Последующие вызовы обновления используют вращающийся `refresh_token` в памяти, пока он доступен; если он отсутствует или истекает в течение `TokenRefreshSkew`, SDK повторно использует настроенный внешний секрет.
+
+Любой ответ 401 от брокерского API сбрасывает access-токен из кэша до того, как исключение уйдёт вызывающему: следующий вызов получит новый токен (повторять вызов или нет — решает вызывающий). Заголовка `WWW-Authenticate` SDK не ждёт — документация BCS его не описывает.
 
 Сбои выдачи refresh-токена распространяются как `BcsAuthException`. SDK не применяет политики повторных попыток, Polly, обратного давления, постоянного хранения токенов на диске или скрытых резилиент-обёрток вокруг выдачи. Если процесс завершается, состояние токенов в памяти теряется.
 
@@ -200,7 +210,9 @@ var orders = await client.Orders.SearchOrdersAsync(
     page: 0,
     size: 50,
     sort: new[] { BcsOrderSort.OrderDateTimeDesc });
-var orderStatus = await client.Orders.GetOrderStatusAsync(Guid.Parse("12345678-1234-1234-9adb-123456789876"));
+var orderStatus = await client.Orders.GetOrderStatusAsync(
+    BcsOrderIdType.ClientOrderId,
+    "12345678-1234-1234-9adb-123456789876");
 var trades = await client.Trades.SearchTradesAsync(
     new BcsTradesSearchRequest
     {
@@ -218,30 +230,18 @@ await using var writeClient = BcsInvestApiClientFactory.Create(
     refreshToken: refreshToken,
     clientId: BcsAuthClientIds.TradeApiWrite);
 
-var createResult = await writeClient.Orders.CreateOrderAsync(
-    new BcsCreateOrderRequest
-    {
-        ClientOrderId = Guid.NewGuid(),
-        Side = BcsOrderSide.Buy,
-        OrderType = BcsOrderType.Limit,
-        OrderQuantity = 10,
-        Ticker = "SBER",
-        ClassCode = "TQBR",
-        Price = 250.10m,
-    });
+var order = new BcsCreateOrderRequest
+{
+    ClientOrderId = Guid.NewGuid(),
+    Side = BcsOrderSide.Buy,
+    OrderType = BcsCreateOrderType.Limit,
+    OrderQuantity = 10,
+    Ticker = "SBER",
+    ClassCode = "TQBR",
+    Price = 250.10m,
+};
 
-var updateResult = await writeClient.Orders.UpdateOrderAsync(
-    originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-    request: new BcsUpdateOrderRequest
-    {
-        ClientOrderId = Guid.NewGuid(),
-        OrderQuantity = 10,
-        Price = 250.20m,
-    });
-
-var cancelResult = await writeClient.Orders.CancelOrderAsync(
-    originalClientOrderId: Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-    clientOrderId: Guid.NewGuid());
+var orderState = await writeClient.Orders.CreateOrderSyncAsync(order); // итог обработки, формат статуса
 ```
 
 ## Использование с DI
@@ -301,100 +301,38 @@ BCS разрешает не более 1440 свечей в одном запр�
 
 ## Пример
 
-`sample/Bcs.InvestApi.Sample` — это командная консоль для вызовов прямых конечных точек. Это не рекомендуемая архитектура приложения и намеренно не демонстрирует оркестрацию, хостинг, логирование, повторные попытки, фоновые сервисы или доменные рабочие процессы.
+`sample/Bcs.InvestApi.Sample` — консольный пример вызовов прямых конечных точек. Это не рекомендуемая архитектура приложения и намеренно не демонстрирует оркестрацию, хостинг, логирование, повторные попытки, фоновые сервисы или доменные рабочие процессы.
 
-Показать доступные команды:
-
-```bash
-dotnet run --project sample/Bcs.InvestApi.Sample -- help
-```
-
-Выполните одну команду с первым аргументом командной строки, `BCS_SAMPLE_COMMAND` или устаревшим `BCS_SAMPLE_ENDPOINT`:
+Пример по очереди вызывает HTTP-методы чтения (лимиты, портфель, инструменты, свечи, расписание, заявки, сделки, дисконты), затем — включённые переменными окружения статус заявки, создание заявки и потоки. Запуск:
 
 ```bash
-dotnet run --project sample/Bcs.InvestApi.Sample -- limits
-dotnet run --project sample/Bcs.InvestApi.Sample -- candles
-dotnet run --project sample/Bcs.InvestApi.Sample -- stream-quotes
+dotnet run --project sample/Bcs.InvestApi.Sample
 ```
 
-Поддерживаемые команды чтения:
-
-```text
-smoke
-limits
-portfolio
-instruments-by-isin
-instruments-by-ticker
-instruments-by-type
-candles
-schedule
-schedule-status
-orders
-order-status
-trades
-margin-discounts
-```
-
-Поддерживаемые WebSocket-команды:
-
-```text
-stream-candles
-stream-orderbook
-stream-quotes
-stream-trades
-stream-limits
-stream-portfolio
-stream-order-executions
-stream-order-transactions
-stream-margin
-```
-
-Торговые команды явные и по умолчанию используют `trade-api-write`:
-
-```text
-order-create
-order-update
-order-cancel
-```
-
-Для всех команд, кроме `help`, образец требует `BCS_REFRESH_TOKEN` и не содержит реальных токенов.
-
-Общие переменные среды:
+Пример требует `BCS_REFRESH_TOKEN` и не содержит реальных токенов. Некорректные значения переменных окружения завершают пример с ненулевым кодом до любого сетевого вызова.
 
 | Переменная | По умолчанию | Используется |
 |---|---|---|
-| `BCS_SAMPLE_CLIENT_ID` | `read` или `write` для торговых команд | все команды |
-| `BCS_SAMPLE_CLASS_CODE` | `TQBR` | инструменты, рыночные данные, расписание, заявки, сделки, потоки |
-| `BCS_SAMPLE_TICKER` | `SBER` | инструменты, рыночные данные, расписание, заявки, сделки, потоки |
-| `BCS_SAMPLE_ISINS` | `RU0009029540,RU0007661625,RU000A0J2Q06` | `instruments-by-isin` |
-| `BCS_SAMPLE_TICKERS` | `SBER,GAZP,ROSN` | `instruments-by-ticker` |
-| `BCS_SAMPLE_PAGE` | `0` | HTTP-команды с пагинацией |
-| `BCS_SAMPLE_SIZE` | `10` | HTTP-команды с пагинацией |
-| `BCS_SAMPLE_SEARCH_FROM` | UTC сейчас минус 7 дней | `orders`, `trades` |
-| `BCS_SAMPLE_SEARCH_TO` | UTC сейчас | `orders`, `trades` |
-| `BCS_SAMPLE_CANDLE_TIMEFRAME` | `Minute1` | `candles`, `stream-candles` |
-| `BCS_SAMPLE_CANDLES_FROM` | UTC сейчас минус 1 день | `candles` |
-| `BCS_SAMPLE_CANDLES_TO` | UTC сейчас | `candles` |
-| `BCS_SAMPLE_INSTRUMENT_TYPE` | `Stock` | `instruments-by-type` |
-| `BCS_SAMPLE_BASE_ASSET_TICKER` | не задано | `instruments-by-type` |
-| `BCS_SAMPLE_STREAM_MESSAGES` | `5` | команды потоков |
-| `BCS_SAMPLE_STREAM_TIMEOUT_SECONDS` | `30` | команды потоков |
-| `BCS_SAMPLE_ORDERBOOK_DEPTH` | `20` | `stream-orderbook` |
+| `BCS_SAMPLE_CLIENT_ID` | `write`, если включено создание заявки, иначе `read` | клиент (`read`, `write`, `trade-api-read`, `trade-api-write`) |
+| `BCS_SAMPLE_CLASS_CODE` | `TQBR` | свечи, расписание, заявки, потоки |
+| `BCS_SAMPLE_TICKER` | `SBER` | свечи, расписание, заявки, потоки |
+| `BCS_SAMPLE_ISINS` | `RU0009029540,RU0007661625,RU000A0J2Q06` | инструменты по ISIN |
+| `BCS_SAMPLE_TICKERS` | `SBER,GAZP,ROSN` | инструменты по тикерам |
+| `BCS_SAMPLE_ORDER_STATUS_ID` | не задано — статус пропускается | статус заявки |
+| `BCS_SAMPLE_ORDER_STATUS_ID_TYPE` | `ClientOrderId` | статус заявки: `ClientOrderId` (UUID) или `ExchangeOrderId` (биржевой номер) |
+| `BCS_SAMPLE_CREATE_ORDER` | `false` | создание заявки |
+| `BCS_SAMPLE_CREATE_ORDER_SYNC` | `false` | синхронное создание (`CreateOrderSyncAsync`) вместо асинхронного |
+| `BCS_SAMPLE_CREATE_ORDER_QUANTITY` | требуется при создании | количество (шт.) |
+| `BCS_SAMPLE_CREATE_ORDER_TYPE` | `Limit` | `Market` или `Limit` |
+| `BCS_SAMPLE_CREATE_PRICE` | требуется для `Limit` | цена лимитной заявки |
+| `BCS_SAMPLE_CREATE_SIDE` | `Buy` | `Buy` или `Sell` |
+| `BCS_SAMPLE_CREATE_CLIENT_ORDER_ID` | новый UUID | `clientOrderId` заявки |
 
-Переменные, специфичные для заявок:
-
-| Операция | Обязательно | Необязательно |
-|---|---|---|
-| Статус | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | устаревший псевдоним: `BCS_SAMPLE_ORDER_STATUS_CLIENT_ORDER_ID` |
-| Создать | `BCS_SAMPLE_ORDER_QUANTITY`; `BCS_SAMPLE_ORDER_PRICE` для нерыночных заявок | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_SIDE` (по умолчанию `Buy`), `BCS_SAMPLE_ORDER_TYPE` (по умолчанию `Limit`) |
-| Обновить | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_QUANTITY` | `BCS_SAMPLE_CLIENT_ORDER_ID`, `BCS_SAMPLE_ORDER_PRICE` |
-| Отменить | `BCS_SAMPLE_ORIGINAL_CLIENT_ORDER_ID` | `BCS_SAMPLE_CLIENT_ORDER_ID` |
-
-Устаревшие псевдонимы переменных create/update/cancel из старых версий образца по-прежнему принимаются в доступных случаях (`BCS_SAMPLE_CREATE_*`, `BCS_SAMPLE_UPDATE_*`, `BCS_SAMPLE_CANCEL_*`). Некорректные значения переменных окружения быстро завершаются с ненулевым кодом до любого сетевого вызова.
+Потоки включаются по одному флагом `=true` и читают несколько сообщений: `BCS_SAMPLE_STREAM_CANDLES`, `BCS_SAMPLE_STREAM_ORDERBOOK`, `BCS_SAMPLE_STREAM_QUOTES`, `BCS_SAMPLE_STREAM_TRADES`, `BCS_SAMPLE_STREAM_LIMITS`, `BCS_SAMPLE_STREAM_PORTFOLIO`, `BCS_SAMPLE_STREAM_ORDER_EVENTS`, `BCS_SAMPLE_STREAM_MARGIN`.
 
 ## Граница «сырой» авторизации
 
-`BcsInvestApiClient` не выставляет APIs сырой авторизационной обмена, API токен-менеджера, refresh-токены или управление жизненным циклом access-токена. Вращающиеся refresh-токены, возвращаемые BCS, остаются внутренней деталью SDK. Вызывающая сторона должна использовать брокерские API-методы, такие как `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`, `GetTradingScheduleStatusAsync(...)`, `GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`, `GetOrderStatusAsync(...)`, `SearchOrdersAsync(...)`, `UpdateOrderAsync(...)`, `CancelOrderAsync(...)`, `SearchTradesAsync(...)` и `GetInstrumentsDiscountsAsync(...)`.
+`BcsInvestApiClient` не выставляет APIs сырой авторизационной обмена, API токен-менеджера, refresh-токены или управление жизненным циклом access-токена. Вращающиеся refresh-токены, возвращаемые BCS, остаются внутренней деталью SDK. Вызывающая сторона должна использовать брокерские API-методы, такие как `GetLimitsAsync(...)`, `GetPortfolioAsync(...)`, `GetDailyTradingScheduleAsync(...)`, `GetTradingScheduleStatusAsync(...)`, `GetInstrumentsBy...Async(...)`, `GetCandlesAsync(...)`, `CreateOrderAsync(...)`, `CreateOrderSyncAsync(...)`, `GetOrderStatusAsync(...)`, `SearchOrdersAsync(...)`, `SearchTradesAsync(...)` и `GetInstrumentsDiscountsAsync(...)`.
 
 Если позже потребуется диагностический или низкоуровневый API «сырой» авторизации, отделите его от основного фасада и сделайте выставление refresh-токена явным в этом API.
 

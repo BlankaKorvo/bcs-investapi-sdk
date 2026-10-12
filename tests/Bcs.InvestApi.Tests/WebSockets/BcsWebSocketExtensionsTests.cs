@@ -215,29 +215,7 @@ public sealed class BcsWebSocketExtensionsTests
     }
 
     [Fact]
-    public async Task ReadAllAsync_YieldsMessagesUntilCleanClose()
-    {
-        var first = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
-        var second = Encoding.UTF8.GetBytes("""{"depoLimit":[],"futureHolding":[],"moneyLimits":[],"futuresLimits":[]}""");
-        var socket = new FakeWebSocket(new[]
-        {
-            FakeWebSocket.Frame.Data(first, WebSocketMessageType.Text, endOfMessage: true),
-            FakeWebSocket.Frame.Data(second, WebSocketMessageType.Text, endOfMessage: true),
-            FakeWebSocket.Frame.Close(),
-        });
-
-        var received = new List<BcsLimitsResponse>();
-        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
-        {
-            received.Add(message);
-        }
-
-        Assert.Equal(2, received.Count);
-        Assert.All(received, message => Assert.Empty(message.DepoLimit));
-    }
-
-    [Fact]
-    public async Task ReadAllAsync_CloseBeforeAnyData_YieldsNothing()
+    public async Task ReceiveJsonMessagesAsync_CloseBeforeAnyData_YieldsNothing()
     {
         var socket = new FakeWebSocket(new[]
         {
@@ -245,7 +223,7 @@ public sealed class BcsWebSocketExtensionsTests
         });
 
         var received = new List<BcsLimitsResponse>();
-        await foreach (var message in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
+        await foreach (var message in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
         {
             received.Add(message);
         }
@@ -254,7 +232,7 @@ public sealed class BcsWebSocketExtensionsTests
     }
 
     [Fact]
-    public async Task ReadAllAsync_CloseMidMessage_Throws()
+    public async Task ReceiveJsonMessagesAsync_CloseMidMessage_Throws()
     {
         var payload = Encoding.UTF8.GetBytes("""{"depoLimit":[]""");
         var socket = new FakeWebSocket(new[]
@@ -265,20 +243,7 @@ public sealed class BcsWebSocketExtensionsTests
 
         await Assert.ThrowsAsync<WebSocketException>(async () =>
         {
-            await foreach (var _ in socket.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
-            {
-            }
-        });
-    }
-
-    [Fact]
-    public async Task ReadAllAsync_NullWebSocket_Throws()
-    {
-        WebSocket? socket = null;
-
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-        {
-            await foreach (var _ in socket!.ReadAllAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
+            await foreach (var _ in socket.ReceiveJsonMessagesAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken))
             {
             }
         });

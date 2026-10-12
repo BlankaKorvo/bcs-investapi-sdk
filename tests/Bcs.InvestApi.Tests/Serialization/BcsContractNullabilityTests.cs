@@ -162,18 +162,6 @@ public sealed class BcsContractNullabilityTests
     }
 
     [Fact]
-    public void BcsCancelOrderResponse_MissingScalarFields_DeserializesAsNull()
-    {
-        const string json = "{}";
-
-        var response = JsonSerializer.Deserialize<BcsCancelOrderResponse>(json, BcsJson.SerializerOptions);
-
-        Assert.NotNull(response);
-        Assert.Null(response.ClientOrderId);
-        Assert.Null(response.Status);
-    }
-
-    [Fact]
     public void BcsCreateOrderResponse_MissingScalarFields_DeserializesAsNull()
     {
         const string json = "{}";
@@ -186,24 +174,14 @@ public sealed class BcsContractNullabilityTests
     }
 
     [Fact]
-    public void BcsUpdateOrderResponse_MissingScalarFields_DeserializesAsNull()
-    {
-        const string json = "{}";
-
-        var response = JsonSerializer.Deserialize<BcsUpdateOrderResponse>(json, BcsJson.SerializerOptions);
-
-        Assert.NotNull(response);
-        Assert.Null(response.ClientOrderId);
-        Assert.Null(response.Status);
-    }
-
-    [Fact]
     public void BcsOrderStatusResponse_MissingScalarFields_DeserializesAsNull()
     {
         const string json = """
         {
-          "data": {
-          }
+          "data": [
+            {
+            }
+          ]
         }
         """;
 
@@ -213,12 +191,22 @@ public sealed class BcsContractNullabilityTests
         Assert.Null(response.ClientOrderId);
         Assert.Null(response.OriginalClientOrderId);
 
-        Assert.NotNull(response.Data);
-        var data = response.Data;
+        var data = Assert.Single(response.Data);
         Assert.Null(data.MessageType);
         Assert.Null(data.OrderStatus);
         Assert.Null(data.TransactionTime);
         Assert.Null(data.OrderQuantity);
+        Assert.Null(data.TimeInForce);
+        Assert.Null(data.Visible);
+    }
+
+    [Fact]
+    public void BcsOrderStatusResponse_MissingData_DeserializesAsEmptyReports()
+    {
+        var response = JsonSerializer.Deserialize<BcsOrderStatusResponse>("{}", BcsJson.SerializerOptions);
+
+        Assert.NotNull(response);
+        Assert.Empty(response.Data);
     }
 
     [Fact]
@@ -711,7 +699,7 @@ public sealed class BcsContractNullabilityTests
         Assert.Equal(exampleTime, order.UpdateDateTime);
         Assert.Equal(0m, order.OrderQuantity);
         Assert.Equal(BcsOrderStatus.Canceled, order.OrderStatus);
-        Assert.Equal(BcsOrderType.Market, order.OrderType);
+        Assert.Equal(BcsSearchOrderType.Market, order.OrderType);
         Assert.Equal(BcsOrderSide.Buy, order.Side);
         Assert.Equal(0m, order.ExecutedQuantityLots);
         Assert.Equal(1, order.MarketTakeProfit);

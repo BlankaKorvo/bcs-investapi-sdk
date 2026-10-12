@@ -8,7 +8,7 @@ public sealed record BcsOrdersSearchRequest
     public DateTimeOffset? EndDateTime { get; init; }
     public BcsOrderSide? Side { get; init; }
     public IReadOnlyList<BcsOrderStatus>? OrderStatus { get; init; }
-    public IReadOnlyList<BcsOrderType>? OrderTypes { get; init; }
+    public IReadOnlyList<BcsSearchOrderType>? OrderTypes { get; init; }
     public IReadOnlyList<string>? Tickers { get; init; }
     public IReadOnlyList<string>? ClassCodes { get; init; }
 }

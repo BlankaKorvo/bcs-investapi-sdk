@@ -13,7 +13,23 @@ public enum BcsOrderStatus
     Active = 3,
 }
 
-public enum BcsOrderType
+/// <summary>
+/// Order type of order creation (<c>orderType</c> of <c>POST /orders</c> and <c>/orders/sync</c>).
+/// BCS numbers creation types differently from the order-list types (<see cref="BcsSearchOrderType"/>):
+/// <c>3</c>–<c>5</c> are algorithmic GTD, iceberg and conditional orders there. Only the types this SDK can
+/// send with every field they need are listed.
+/// </summary>
+public enum BcsCreateOrderType
+{
+    Market = 1,
+    Limit = 2,
+}
+
+/// <summary>
+/// Order type of the order list (<c>orderTypes</c> filter and <c>orderType</c> of
+/// <c>POST /orders/search</c> records).
+/// </summary>
+public enum BcsSearchOrderType
 {
     Market = 1,
     Limit = 2,
@@ -24,7 +40,18 @@ public enum BcsOrderType
     TakeProfitAndStopLoss = 7,
     LimitForThirtyDays = 10,
     TakeProfit = 11,
-    TrailingStop = 12,
+}
+
+/// <summary>
+/// Kind of order identifier of the order status (<c>orderIdType</c> of <c>GET /orders</c>).
+/// </summary>
+public enum BcsOrderIdType
+{
+    /// <summary>The <c>clientOrderId</c> UUID the order was created with.</summary>
+    ClientOrderId = 1,
+
+    /// <summary>The exchange order identifier <c>YYMMDD-ClassCode-OrderNumber</c>.</summary>
+    ExchangeOrderId = 2,
 }
 
 public enum BcsOrderSort
@@ -66,22 +93,43 @@ internal static class BcsOrderStatusExtensions
         };
 }
 
-internal static class BcsOrderTypeExtensions
+internal static class BcsCreateOrderTypeExtensions
 {
-    internal static int ToApiValue(this BcsOrderType type) =>
+    internal static int ToApiValue(this BcsCreateOrderType type) =>
         type switch
         {
-            BcsOrderType.Market => 1,
-            BcsOrderType.Limit => 2,
-            BcsOrderType.Iceberg => 3,
-            BcsOrderType.StopLimit => 4,
-            BcsOrderType.TakeProfitWithLimitOrder => 5,
-            BcsOrderType.StopLoss => 6,
-            BcsOrderType.TakeProfitAndStopLoss => 7,
-            BcsOrderType.LimitForThirtyDays => 10,
-            BcsOrderType.TakeProfit => 11,
-            BcsOrderType.TrailingStop => 12,
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unsupported BCS order type."),
+            BcsCreateOrderType.Market => 1,
+            BcsCreateOrderType.Limit => 2,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unsupported BCS order type for order creation."),
+        };
+}
+
+internal static class BcsSearchOrderTypeExtensions
+{
+    internal static int ToApiValue(this BcsSearchOrderType type) =>
+        type switch
+        {
+            BcsSearchOrderType.Market => 1,
+            BcsSearchOrderType.Limit => 2,
+            BcsSearchOrderType.Iceberg => 3,
+            BcsSearchOrderType.StopLimit => 4,
+            BcsSearchOrderType.TakeProfitWithLimitOrder => 5,
+            BcsSearchOrderType.StopLoss => 6,
+            BcsSearchOrderType.TakeProfitAndStopLoss => 7,
+            BcsSearchOrderType.LimitForThirtyDays => 10,
+            BcsSearchOrderType.TakeProfit => 11,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unsupported BCS order type for the order list."),
+        };
+}
+
+internal static class BcsOrderIdTypeExtensions
+{
+    internal static string ToApiValue(this BcsOrderIdType type) =>
+        type switch
+        {
+            BcsOrderIdType.ClientOrderId => "1",
+            BcsOrderIdType.ExchangeOrderId => "2",
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unsupported BCS order identifier type."),
         };
 }
 

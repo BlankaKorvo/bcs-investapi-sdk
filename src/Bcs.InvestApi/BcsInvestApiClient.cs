@@ -9,9 +9,9 @@ using Bcs.InvestApi.WebSockets;
 /// </summary>
 /// <remarks>
 /// Endpoint methods throw <see cref="Contracts.Exceptions.BcsApiException"/> on non-success responses and
-/// never retry. On a <c>401 invalid_token</c> the cached access token is dropped before the exception
-/// propagates, so the next call obtains a fresh token automatically; retrying after such a 401 is the
-/// caller's responsibility.
+/// never retry. On any <c>401</c> the cached access token is dropped before the exception propagates,
+/// so the next call obtains a fresh token automatically; retrying after such a 401 is the caller's
+/// responsibility.
 /// </remarks>
 public sealed class BcsInvestApiClient : IDisposable, IAsyncDisposable
 {
