@@ -72,7 +72,8 @@ net10.0
 
 SDK предоставляет только инфраструкцию аутентифицированного WebSocket-соединения. Жизненный цикл соединения — переподключение, обратное давление, ping/pong, мультиплексирование и маршрутизация сообщений — принадлежит слою приложения (см. [ARCHITECTURE.md](ARCHITECTURE.md) — матрицу областей).
 
-- `WebSockets.ConnectAsync(Uri url, CancellationToken)` открывает аутентифицированный `ClientWebSocket` (свежий Bearer-токен при каждом вызове).
+- `WebSockets.ConnectAsync(Uri url, CancellationToken)` открывает аутентифицированный `WebSocket` (свежий Bearer-токен при каждом вызове). Сервер отказал в рукопожатии (ответил кодом HTTP, а не 101) — `BcsApiException` с этим кодом; при 401 кэшированный access-токен сбрасывается, как у HTTP, и следующее подключение получит свежий.
+- Сам сокет открывает транспорт `IBcsWebSocketTransport` — шов для тестов, как `HttpMessageHandler` для HTTP: `BcsInvestApiClientFactory.Create(settings, httpMessageHandler, timeProvider, webSocketTransport)`. По умолчанию — `BcsClientWebSocketTransport`: `ClientWebSocket` с keep-alive (`WebSocketKeepAliveInterval`, `WebSocketKeepAliveTimeout`); .NET отвечает на ping сервера, только пока ожидает чтение, — сокет нужно читать постоянно.
 - `WebSockets.ConnectAndSubscribeAsync(url, subscribeMessage, ct)` открывает сокет и отправляет содержимое подписки в первом кадре (для потоков, требующих явной подписки, например рыночные данные).
 - `WebSocket.SendJsonMessageAsync(message, ct)` сериализует и отправляет один текстовый кадр с JSON-параметрами SDK (содержимое подписки/отписки).
 - `WebSocket.ReceiveJsonMessageAsync<T>(ct)` считывает одно логическое сообщение; `WebSocket.ReceiveJsonMessagesAsync<T>(ct)` передаёт их как `IAsyncEnumerable<T>` до чистого закрытия или отмены — единственный способ читать поток сообщений.

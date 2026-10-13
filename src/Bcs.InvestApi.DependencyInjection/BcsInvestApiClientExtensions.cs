@@ -95,8 +95,9 @@ public static class BcsInvestApiClientExtensions
             settings.ValidateWebSocketKeepAlive();
             return new BcsWebSocketConnector(
                 sp.GetRequiredService<IBcsAccessTokenProvider>(),
-                settings.WebSocketKeepAliveInterval,
-                settings.WebSocketKeepAliveTimeout);
+                new BcsClientWebSocketTransport(
+                    settings.WebSocketKeepAliveInterval,
+                    settings.WebSocketKeepAliveTimeout));
         });
 
         services.AddSingleton(sp => new BcsInvestApiClient(

@@ -2,6 +2,7 @@ namespace Bcs.InvestApi;
 
 using Bcs.InvestApi.Contracts.Enums;
 using Bcs.InvestApi.Services;
+using Bcs.InvestApi.WebSockets;
 
 public static class BcsInvestApiClientFactory
 {
@@ -28,10 +29,16 @@ public static class BcsInvestApiClientFactory
             httpMessageHandler);
     }
 
+    /// <summary>
+    /// Creates a client from <paramref name="settings"/>. <paramref name="httpMessageHandler"/> and
+    /// <paramref name="webSocketTransport"/> replace the HTTP and WebSocket transports (tests); by default
+    /// the client uses its own <see cref="HttpClient"/> and <see cref="BcsClientWebSocketTransport"/>.
+    /// </summary>
     public static BcsInvestApiClient Create(
         BcsInvestApiSettings settings,
         HttpMessageHandler? httpMessageHandler = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IBcsWebSocketTransport? webSocketTransport = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings.ValidateRefreshToken();
@@ -48,7 +55,8 @@ public static class BcsInvestApiClientFactory
         var services = BcsInvestApiClientServices.Create(
             settings,
             httpClient,
-            timeProvider);
+            timeProvider,
+            webSocketTransport: webSocketTransport);
 
         return services.CreateClient(
             ownsTokenManager: true,

@@ -55,7 +55,8 @@ internal sealed class BcsInvestApiClientServices
         BcsInvestApiSettings settings,
         HttpClient httpClient,
         TimeProvider? timeProvider,
-        IBcsHttpSender? requestSender = null)
+        IBcsHttpSender? requestSender = null,
+        IBcsWebSocketTransport? webSocketTransport = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(httpClient);
@@ -76,8 +77,9 @@ internal sealed class BcsInvestApiClientServices
             new BcsMarginalIndicatorsService(settings, httpClient, tokens, sender),
             new BcsWebSocketConnector(
                 tokens,
-                settings.WebSocketKeepAliveInterval,
-                settings.WebSocketKeepAliveTimeout));
+                webSocketTransport ?? new BcsClientWebSocketTransport(
+                    settings.WebSocketKeepAliveInterval,
+                    settings.WebSocketKeepAliveTimeout)));
     }
 
     internal BcsInvestApiClient CreateClient(

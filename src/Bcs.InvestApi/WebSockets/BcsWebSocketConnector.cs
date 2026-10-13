@@ -1,41 +1,38 @@
 namespace Bcs.InvestApi.WebSockets;
 
+using System.Net;
 using System.Net.WebSockets;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Tokens;
 
 /// <summary>
-/// Opens an authenticated <see cref="ClientWebSocket"/> connection to a BCS Trade API WebSocket endpoint.
+/// Opens an authenticated WebSocket connection to a BCS Trade API WebSocket endpoint.
 /// The connector retrieves a fresh access token from <see cref="IBcsAccessTokenProvider"/>,
-/// attaches it as a Bearer authorization header, and configures keep-alive so the connection
-/// participates in the ping/pong heartbeat and dead peers are detected.
+/// attaches it as a Bearer authorization header and opens the socket through its
+/// <see cref="IBcsWebSocketTransport"/> (by default <see cref="BcsClientWebSocketTransport"/>, with keep-alive).
 ///
-/// .NET answers the server's ping frames with pong automatically while a receive is pending,
-/// so the heartbeat works as long as the caller keeps reading. Reconnect, backoff and
-/// multiplexing remain the caller's responsibility; on disconnect, request a new connection
-/// and a fresh token will be fetched automatically.
+/// A handshake refused with 401 drops the cached access token, as an HTTP 401 does, so the next connect
+/// obtains a fresh one. Reconnect, backoff and multiplexing remain the caller's responsibility.
 /// </summary>
 public sealed class BcsWebSocketConnector
 {
     private readonly IBcsAccessTokenProvider _tokens;
-    private readonly TimeSpan _keepAliveInterval;
-    private readonly TimeSpan _keepAliveTimeout;
+    private readonly IBcsWebSocketTransport _transport;
 
     internal BcsWebSocketConnector(
         IBcsAccessTokenProvider tokens,
-        TimeSpan keepAliveInterval,
-        TimeSpan keepAliveTimeout)
+        IBcsWebSocketTransport transport)
     {
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-        _keepAliveInterval = keepAliveInterval;
-        _keepAliveTimeout = keepAliveTimeout;
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     }
 
     /// <summary>
     /// Opens an authenticated WebSocket connection to the given URL.
-    /// On success returns an open <see cref="ClientWebSocket"/>; the caller owns disposal.
-    /// On failure, the partially-created socket is disposed before the exception propagates.
+    /// On success returns an open <see cref="WebSocket"/>; the caller owns disposal.
+    /// A refused handshake — <see cref="BcsApiException"/> with the HTTP status of the answer.
     /// </summary>
-    public async Task<ClientWebSocket> ConnectAsync(Uri url, CancellationToken cancellationToken = default)
+    public async Task<WebSocket> ConnectAsync(Uri url, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(url);
 
@@ -43,17 +40,15 @@ public sealed class BcsWebSocketConnector
             .GetAccessTokenAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var socket = new ClientWebSocket();
         try
         {
-            socket.Options.SetRequestHeader("Authorization", $"Bearer {accessToken}");
-            ConfigureKeepAlive(socket, _keepAliveInterval, _keepAliveTimeout);
-            await socket.ConnectAsync(url, cancellationToken).ConfigureAwait(false);
-            return socket;
+            return await _transport
+                .ConnectAsync(url, $"Bearer {accessToken}", cancellationToken)
+                .ConfigureAwait(false);
         }
-        catch
+        catch (BcsApiException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
-            socket.Dispose();
+            _tokens.InvalidateAccessToken(accessToken);
             throw;
         }
     }
@@ -65,7 +60,7 @@ public sealed class BcsWebSocketConnector
     /// <see cref="ConnectAsync"/> instead. The caller still owns the socket lifecycle: receiving, unsubscribing,
     /// reconnect and disposal. On failure the socket is disposed before the exception propagates.
     /// </summary>
-    public async Task<ClientWebSocket> ConnectAndSubscribeAsync<TSubscribe>(
+    public async Task<WebSocket> ConnectAndSubscribeAsync<TSubscribe>(
         Uri url,
         TSubscribe subscribeMessage,
         CancellationToken cancellationToken = default)
@@ -85,11 +80,5 @@ public sealed class BcsWebSocketConnector
             socket.Dispose();
             throw;
         }
-    }
-
-    internal static void ConfigureKeepAlive(ClientWebSocket socket, TimeSpan interval, TimeSpan timeout)
-    {
-        socket.Options.KeepAliveInterval = interval;
-        socket.Options.KeepAliveTimeout = timeout;
     }
 }
