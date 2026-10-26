@@ -61,16 +61,24 @@ internal sealed class BcsApiRequestExecutor
                 cancellationToken)
                 .ConfigureAwait(false);
 
-            var response = JsonSerializer.Deserialize<TResponse>(
-                responseBody,
-                BcsJson.SerializerOptions);
-
-            if (response is null)
+            // The body goes into the error as it came: the next unexpected form is seen at once (BUG-63). It holds no token —
+            // the token is in the request's header, and the token endpoint does not come here.
+            TResponse? response;
+            try
             {
-                throw new JsonException($"BCS {endpointName} response body is empty or cannot be deserialized.");
+                response = JsonSerializer.Deserialize<TResponse>(
+                    responseBody,
+                    BcsJson.SerializerOptions);
+            }
+            catch (JsonException ex)
+            {
+                throw new BcsResponseFormatException(endpointName, responseBody, ex);
             }
 
-            return response;
+            return response ?? throw new BcsResponseFormatException(
+                endpointName,
+                responseBody,
+                new JsonException("The body is JSON null."));
         }
         finally
         {

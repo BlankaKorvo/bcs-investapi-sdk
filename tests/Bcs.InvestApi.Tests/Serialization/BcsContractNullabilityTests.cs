@@ -200,13 +200,26 @@ public sealed class BcsContractNullabilityTests
         Assert.Null(data.Visible);
     }
 
+    // data is required (the method pages): an answer without it does not describe the order.
     [Fact]
-    public void BcsOrderStatusResponse_MissingData_DeserializesAsEmptyReports()
+    public void BcsOrderStatusResponse_MissingData_IsAnError()
     {
-        var response = JsonSerializer.Deserialize<BcsOrderStatusResponse>("{}", BcsJson.SerializerOptions);
+        var exception = Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize<BcsOrderStatusResponse>("{}", BcsJson.SerializerOptions));
+
+        Assert.Contains("data", exception.Message);
+    }
+
+    [Fact]
+    public void BcsOrderStatusResponse_DataAsOneObject_MissingScalarFields_DeserializeAsNull()
+    {
+        var response = JsonSerializer.Deserialize<BcsOrderStatusResponse>("""{ "data": {} }""", BcsJson.SerializerOptions);
 
         Assert.NotNull(response);
-        Assert.Empty(response.Data);
+        var data = Assert.Single(response.Data);
+        Assert.Null(data.OrderStatus);
+        Assert.Null(data.ExecutedQuantity);
+        Assert.Null(data.TransactionTime);
     }
 
     [Fact]

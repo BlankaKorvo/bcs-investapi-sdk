@@ -221,6 +221,28 @@ public sealed class BcsAuthServiceTests
         Assert.Contains(invalidField, exception.Message);
     }
 
+    // The answer of the token endpoint holds the tokens: an answer that cannot be read is not shown, unlike every other
+    // BCS answer (BcsResponseFormatException).
+    [Fact]
+    public async Task GetAccessTokenAsync_AnswerThatCannotBeRead_DoesNotShowTheTokens()
+    {
+        var answer = ValidAuthResponseJson().Replace("\"expires_in\": 86400", "\"expires_in\": \"a day\"", StringComparison.Ordinal);
+        var handler = new CapturingHttpMessageHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.OK, answer)));
+        var service = CreateService(handler);
+
+        var exception = await Assert.ThrowsAnyAsync<System.Text.Json.JsonException>(() =>
+            service.GetAccessTokenAsync(new BcsAuthRequest
+            {
+                RefreshToken = "refresh-token-1",
+                ClientId = BcsAuthClientIds.TradeApiRead,
+                GrantType = BcsGrantTypes.RefreshToken
+            }, TestContext.Current.CancellationToken));
+
+        Assert.IsNotType<Bcs.InvestApi.Contracts.Exceptions.BcsResponseFormatException>(exception);
+        Assert.DoesNotContain("access-token-1", exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh-token-2", exception.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task GetAccessTokenAsync_InvalidGrant_ThrowsBcsAuthException()
     {

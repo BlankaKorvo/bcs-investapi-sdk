@@ -60,8 +60,9 @@ public sealed class BcsOrdersServiceTests
         Assert.Equal("OK", response.Status);
     }
 
-    // Order status by the method's response schema (https://trade-api.bcs.ru/http/operations/get-order-by-id):
-    // the site has no ready response example for HTTP methods, only the schema; every field of a report is filled.
+    // Order status in the form of the method's response schema (https://trade-api.bcs.ru/http/operations/get-order-by-id):
+    // reports as an array. The site has no ready response example for HTTP methods, only the schema; every field of a report
+    // is filled. BCS itself sends one object (the test after this one).
     [Fact]
     public async Task GetOrderStatusAsync_ByClientOrderId_SendsGetWithQueryAndDeserializesReports()
     {
@@ -203,6 +204,118 @@ public sealed class BcsOrdersServiceTests
         Assert.Equal(1, filled.OffsetType);
     }
 
+    // BUG-63: BCS sends data as one object — the order after its latest event. On the account (2026-10-26) reading it as a
+    // list failed with «could not be converted to IReadOnlyList…», Path: $.data, BytePositionInLine: 64 — the first byte of
+    // the value after {"clientOrderId":"<UUID>","data":, as in this answer.
+    [Fact]
+    public async Task GetOrderStatusAsync_DataAsOneObject_IsTheOrdersOneReport()
+    {
+        const string statusJson =
+            """{"clientOrderId":"12345678-1234-1234-9adb-123456789876","data":{"messageType":"8","orderStatus":"2","executionType":"2","orderQuantity":100,"executedQuantity":100,"lastQuantity":100,"remainedQuantity":0,"ticker":"SGZH","classCode":"TQBR","side":"1","orderType":"1","averagePrice":0.7455,"orderId":"20261026-TQBR-123","executionId":"TQBR-Z3fE7c-S-1-1-N","price":0,"currency":"RUB","clientCode":"123456","transactionTime":"2026-10-26T13:12:34.400Z","tradeDate":"2026-10-26","orderNumber":"123","executionValue":74.55,"commission":0.04,"securityExchange":"TQBR"},"originalClientOrderId":"12345678-1234-1234-9adb-123456789876"}""";
+        Assert.Equal('{', statusJson[63]);
+
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, statusJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("12345678-1234-1234-9adb-123456789876", response.OriginalClientOrderId);
+        var report = Assert.Single(response.Data);
+        Assert.Equal("2", report.OrderStatus);
+        Assert.Equal(100m, report.ExecutedQuantity);
+        Assert.Equal(100m, report.LastQuantity);
+        Assert.Equal(0.7455m, report.AveragePrice);
+        Assert.Equal("20261026-TQBR-123", report.OrderId);
+        Assert.Equal("TQBR-Z3fE7c-S-1-1-N", report.ExecutionId);
+        Assert.Null(response.AdditionalFields);
+        Assert.Null(report.AdditionalFields);
+    }
+
+    // data that is not a report or reports: the answer does not describe the order — an error that shows the answer.
+    [Theory]
+    [InlineData("""{"clientOrderId":"12345678-1234-1234-9adb-123456789876","data":"2"}""")]
+    [InlineData("""{"clientOrderId":"12345678-1234-1234-9adb-123456789876","data":2}""")]
+    [InlineData("""{"clientOrderId":"12345678-1234-1234-9adb-123456789876","data":null}""")]
+    [InlineData("""{"clientOrderId":"12345678-1234-1234-9adb-123456789876","data":[null]}""")]
+    [InlineData("""{"clientOrderId":"12345678-1234-1234-9adb-123456789876"}""")]
+    [InlineData("null")]
+    public async Task GetOrderStatusAsync_DataNotAReport_ThrowsWithTheAnswer(string statusJson)
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, statusJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var exception = await Assert.ThrowsAsync<BcsResponseFormatException>(() => service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal("order-status", exception.Endpoint);
+        Assert.Contains("BCS order-status: the answer cannot be read", exception.Message);
+        Assert.Contains(statusJson, exception.Message);
+        Assert.DoesNotContain("access-token-1", exception.Message);
+    }
+
+    // Fields the contract does not name are kept: an answer of an unexpected form shows them.
+    [Fact]
+    public async Task GetOrderStatusAsync_UnknownFields_AreKept()
+    {
+        const string statusJson =
+            """{"clientOrderId":"12345678-1234-1234-9adb-123456789876","requestState":"DONE","data":{"orderStatus":"0","order":{"status":"NEW"}}}""";
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, statusJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.GetOrderStatusAsync(
+            BcsOrderIdType.ClientOrderId,
+            "12345678-1234-1234-9adb-123456789876",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("DONE", response.AdditionalFields?["requestState"].GetString());
+        var report = Assert.Single(response.Data);
+        Assert.Equal("0", report.OrderStatus);
+        Assert.Equal("NEW", report.AdditionalFields?["order"].GetProperty("status").GetString());
+    }
+
+    // Every method: an answer the SDK cannot read is in the error, a long one cut with its length.
+    [Fact]
+    public async Task SearchOrdersAsync_AnswerThatCannotBeRead_ThrowsWithTheAnswerCut()
+    {
+        var answer = """{"records":{"orderId":"1"},"padding":""" + "\"" + new string('x', 3000) + "\"}";
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, answer)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var exception = await Assert.ThrowsAsync<BcsResponseFormatException>(() => service.SearchOrdersAsync(
+            new BcsOrdersSearchRequest(), page: 0, size: 100, sort: null, TestContext.Current.CancellationToken));
+
+        Assert.Equal("orders-search", exception.Endpoint);
+        Assert.Equal("$.records", exception.Path);
+        Assert.Contains(answer[..BcsResponseFormatException.MaxShownLength], exception.Message);
+        Assert.DoesNotContain(answer, exception.Message);
+        Assert.Contains($"(the first {BcsResponseFormatException.MaxShownLength} of {answer.Length} characters)", exception.Message);
+    }
+
     [Fact]
     public async Task GetOrderStatusAsync_ByExchangeOrderId_SendsTheIdentifierWithType2()
     {
@@ -320,7 +433,8 @@ public sealed class BcsOrdersServiceTests
     }
 
     // Synchronous creation answers in the order-status format
-    // (https://trade-api.bcs.ru/http/operations/sync/create-order-sync), by the method's response schema.
+    // (https://trade-api.bcs.ru/http/operations/sync/create-order-sync), here by the method's response schema — an array;
+    // BCS sends one object (the test after this one).
     [Fact]
     public async Task CreateOrderSyncAsync_PostsTheCreationBodyAndDeserializesTheOrderState()
     {
@@ -374,6 +488,28 @@ public sealed class BcsOrdersServiceTests
             """{"clientOrderId":"12345678-1234-1234-1234-123456789123","side":"1","orderType":"2","orderQuantity":10,"ticker":"APTK","classCode":"TQBR","price":9.530}""",
             handler.LastRequestContent);
         Assert.Equal("12345678-1234-1234-1234-123456789123", response.ClientOrderId);
+        var report = Assert.Single(response.Data);
+        Assert.Equal("8", report.OrderStatus);
+        Assert.Equal("Trading is closed", report.RejectReason);
+        Assert.Equal("20260501-TQBR-79628540664", report.OrderId);
+    }
+
+    // BUG-63: the answer of the synchronous creation as BCS sends it — data is one object.
+    [Fact]
+    public async Task CreateOrderSyncAsync_DataAsOneObject_IsTheOrderState()
+    {
+        const string stateJson =
+            """{"clientOrderId":"12345678-1234-1234-1234-123456789123","data":{"messageType":"8","orderStatus":"8","executionType":"8","orderQuantity":10,"executedQuantity":0,"lastQuantity":0,"remainedQuantity":0,"ticker":"APTK","classCode":"TQBR","side":"1","orderType":"2","averagePrice":0,"orderId":"20260501-TQBR-79628540664","price":9.53,"currency":"RUB","transactionTime":"2026-05-01T07:00:00.000Z","tradeDate":"2026-05-01","rejectReason":"Trading is closed"}}""";
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+            Task.FromResult(JsonResponse(HttpStatusCode.OK, stateJson)));
+        var service = new BcsOrdersService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            new BcsHttpRequestSender());
+
+        var response = await service.CreateOrderSyncAsync(CreateOrderRequest(), TestContext.Current.CancellationToken);
+
         var report = Assert.Single(response.Data);
         Assert.Equal("8", report.OrderStatus);
         Assert.Equal("Trading is closed", report.RejectReason);

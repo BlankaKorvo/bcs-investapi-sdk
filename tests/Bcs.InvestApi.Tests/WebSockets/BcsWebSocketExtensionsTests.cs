@@ -2,6 +2,7 @@ namespace Bcs.InvestApi.Tests.WebSockets;
 
 using System.Net.WebSockets;
 using System.Text;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Contracts.Limits;
 using Bcs.InvestApi.WebSockets;
 using Xunit;
@@ -118,6 +119,25 @@ public sealed class BcsWebSocketExtensionsTests
 
         await Assert.ThrowsAsync<WebSocketException>(() =>
             socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken));
+    }
+
+    // A message that cannot be read shows its text: the first unexpected form of a stream is seen at once (BUG-63).
+    [Fact]
+    public async Task ReceiveJsonMessageAsync_MessageThatCannotBeRead_ThrowsWithItsText()
+    {
+        const string payload = """{"depoLimit":{"ticker":"SBER"}}""";
+        var socket = new FakeWebSocket(new[]
+        {
+            FakeWebSocket.Frame.Data(Encoding.UTF8.GetBytes(payload), WebSocketMessageType.Text, endOfMessage: true),
+        });
+
+        var exception = await Assert.ThrowsAsync<BcsResponseFormatException>(() =>
+            socket.ReceiveJsonMessageAsync<BcsLimitsResponse>(TestContext.Current.CancellationToken));
+
+        Assert.Equal("websocket", exception.Endpoint);
+        Assert.Contains(payload, exception.Message);
+        Assert.Equal("$.depoLimit", exception.Path);
+        Assert.IsAssignableFrom<System.Text.Json.JsonException>(exception.InnerException);
     }
 
     [Fact]

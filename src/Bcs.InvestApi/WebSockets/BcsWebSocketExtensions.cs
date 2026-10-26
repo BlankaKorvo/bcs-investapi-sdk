@@ -3,7 +3,9 @@ namespace Bcs.InvestApi.WebSockets;
 using System.Buffers;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
+using Bcs.InvestApi.Contracts.Exceptions;
 using Bcs.InvestApi.Infrastructure;
 
 /// <summary>
@@ -15,6 +17,9 @@ using Bcs.InvestApi.Infrastructure;
 public static class BcsWebSocketExtensions
 {
     private const int InitialBufferSize = 8 * 1024;
+
+    // The endpoint a message that cannot be read names: the socket does not know which stream it serves.
+    private const string WebSocketEndpoint = "websocket";
 
     /// <summary>
     /// Serializes <paramref name="message"/> with the SDK's JSON options and sends it as a single
@@ -41,7 +46,8 @@ public static class BcsWebSocketExtensions
     /// Reads a single logical message from the WebSocket (concatenating frames until <c>EndOfMessage</c>)
     /// and deserializes it as <typeparamref name="T"/> using the SDK's JSON options.
     /// Returns <c>default</c> if the server closes the connection cleanly before any data arrives.
-    /// Throws <see cref="WebSocketException"/> if the connection closes in the middle of a message.
+    /// Throws <see cref="WebSocketException"/> if the connection closes in the middle of a message, and
+    /// <see cref="BcsResponseFormatException"/> — with the message's text — if the message cannot be read.
     /// </summary>
     public static async Task<T?> ReceiveJsonMessageAsync<T>(
         this WebSocket webSocket,
@@ -87,9 +93,19 @@ public static class BcsWebSocketExtensions
                 }
             }
 
-            return JsonSerializer.Deserialize<T>(
-                new ReadOnlySpan<byte>(buffer, 0, written),
-                BcsJson.SerializerOptions);
+            try
+            {
+                return JsonSerializer.Deserialize<T>(
+                    new ReadOnlySpan<byte>(buffer, 0, written),
+                    BcsJson.SerializerOptions);
+            }
+            catch (JsonException ex)
+            {
+                throw new BcsResponseFormatException(
+                    WebSocketEndpoint,
+                    Encoding.UTF8.GetString(buffer, 0, written),
+                    ex);
+            }
         }
         finally
         {

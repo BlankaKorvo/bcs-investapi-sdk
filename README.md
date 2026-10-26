@@ -65,7 +65,8 @@ net10.0
 
 - `CreateOrderAsync` — асинхронное создание: ответ только подтверждает приём запроса (`clientOrderId`, `status`).
 - `CreateOrderSyncAsync` — синхронное создание: BCS дожидается итога обработки и отвечает состоянием заявки в формате статуса (`BcsOrderStatusResponse`). Тело запроса то же, что у `CreateOrderAsync`.
-- `GetOrderStatusAsync(orderIdType, orderId)` — статус заявки по виду идентификатора: `BcsOrderIdType.ClientOrderId` (`1`) — UUID, с которым заявка создана (не UUID и пустой UUID — `ArgumentException` до запроса); `BcsOrderIdType.ExchangeOrderId` (`2`) — биржевой номер `ГГММДД-КодКласса-НомерЗаявки`. `Data` — массив отчётов о заявке. Заявки нет — `BcsApiException` с кодом 404.
+- `GetOrderStatusAsync(orderIdType, orderId)` — статус заявки по виду идентификатора: `BcsOrderIdType.ClientOrderId` (`1`) — UUID, с которым заявка создана (не UUID и пустой UUID — `ArgumentException` до запроса); `BcsOrderIdType.ExchangeOrderId` (`2`) — биржевой номер `ГГММДД-КодКласса-НомерЗаявки`. Заявки нет — `BcsApiException` с кодом 404.
+- `data` статуса и синхронного создания (`BcsOrderStatusResponse.Data` — список отчётов, последний — свежий) BCS присылает одним объектом — заявкой после её последнего события (на счёте 2026-10-26; так же описаны устаревший статус `/orders/{originalClientOrderId}` и потоки заявок), а страницы методов описывают массивом; SDK читает обе формы. Ни одна не обещает отчётов от первого — прежних исполнений заявки в ответе может не быть. `data` обязателен; не объект и не массив, `null` или отчёт `null` в массиве — ошибка разбора. Поля, которых контракт не знает, сохраняются в `AdditionalFields` ответа и отчёта.
 - Типы заявки у создания и у списка заявок закодированы по-разному, поэтому это разные перечисления: `BcsCreateOrderType` (создание: `Market` = `1`, `Limit` = `2`; коды `3`–`5` — алгоритмическая GTD, айсберг и условная — требуют полей, которых `BcsCreateOrderRequest` не содержит, и SDK их не отправляет) и `BcsSearchOrderType` (фильтр и записи `SearchOrdersAsync`: `1`–`7`, `10`, `11`).
 
 ## WebSocket-потоки
@@ -354,6 +355,8 @@ catch (BcsAuthException ex) when (ex.Error == "invalid_grant")
     throw;
 }
 ```
+
+Ответ, который SDK не разобрал в свой контракт (тело успешного HTTP-ответа любого метода или сообщение WebSocket), — `BcsResponseFormatException` (наследник `JsonException`): в тексте — метод (`order-status`, `websocket`, …), ошибка разбора и сам ответ, до 2 000 знаков (длиннее — урезан, с числом знаков всего), чтобы первая же неожиданная форма была видна сразу. Ответ точки токена (`/token`) так не показывается — в нём токены; запрос с заголовком `Authorization` SDK не показывает никогда.
 
 ## Владение HttpClient
 

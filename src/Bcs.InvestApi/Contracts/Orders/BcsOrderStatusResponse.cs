@@ -1,17 +1,35 @@
 namespace Bcs.InvestApi.Contracts.Orders;
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Bcs.InvestApi.Infrastructure;
+
 /// <summary>
 /// Order status (<c>GET /orders?orderIdType=&amp;orderId=</c>); the synchronous order methods
-/// (<c>POST /orders/sync</c>) answer in the same format. <see cref="Data"/> holds the order's reports.
+/// (<c>POST /orders/sync</c>) answer in the same format. <see cref="Data"/> holds reports of the order, the latest last.
 /// </summary>
+/// <remarks>
+/// <c>data</c> comes in either of two forms (<see cref="BcsOrderReportsConverter"/>). BCS sends one object — the order after
+/// its latest event: on the account on 2026-10-26 reading it as a list failed at its first byte, and so the deprecated
+/// <c>GET /orders/{originalClientOrderId}</c> and the order streams document it. The pages of these methods document an
+/// array. Neither form promises every report from the first: the earlier executions of the order may be missing.
+/// <c>data</c> is required — without it the answer does not describe the order.
+/// </remarks>
 public sealed record BcsOrderStatusResponse
 {
+    /// <summary>The documentation calls it the request's identifier; the order's UUID is <see cref="OriginalClientOrderId"/>.</summary>
     public string? ClientOrderId { get; init; }
 
     public string? OriginalClientOrderId { get; init; }
 
+    [JsonRequired]
+    [JsonConverter(typeof(BcsOrderReportsConverter))]
     public IReadOnlyList<BcsOrderStatusData> Data { get; init; } =
         Array.Empty<BcsOrderStatusData>();
+
+    /// <summary>Fields of the answer this contract does not name, as sent: an answer of an unexpected form shows them.</summary>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalFields { get; init; }
 }
 
 /// <summary>
@@ -92,4 +110,8 @@ public sealed record BcsOrderStatusData
 
     /// <summary><c>0</c> — price currency, <c>1</c> — percent.</summary>
     public int? OffsetType { get; init; }
+
+    /// <summary>Fields of the report this contract does not name, as sent: a report of an unexpected form shows them.</summary>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalFields { get; init; }
 }
