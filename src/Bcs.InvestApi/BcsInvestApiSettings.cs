@@ -50,8 +50,8 @@ public sealed class BcsInvestApiSettings
     public TimeSpan TokenRefreshSkew { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Maximum time allowed for one refresh-token auth exchange once refresh starts.
-    /// Default: 60 seconds.
+    /// Maximum time allowed for one refresh-token auth exchange once refresh starts. A caller cancelled meanwhile stops
+    /// waiting at once; the exchange runs to its end and keeps the pair. Default: 60 seconds.
     /// </summary>
     public TimeSpan TokenRefreshOperationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 

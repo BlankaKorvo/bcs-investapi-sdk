@@ -490,8 +490,9 @@ public sealed class BcsTokenManagerTests
         Assert.Null(current);
     }
 
+    // The caller stops waiting at once; the exchange runs to its end and keeps the pair — the next caller takes it.
     [Fact]
-    public async Task GetAccessTokenAsync_WhenCallerCancelsDuringAuthRequest_CompletesExchangeAndStoresTokenPair()
+    public async Task GetAccessTokenAsync_WhenCallerCancelsDuringAuthRequest_StopsWaiting_ExchangeCompletesAndStoresTokenPair()
     {
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
         var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -517,15 +518,48 @@ public sealed class BcsTokenManagerTests
         await requestEntered.Task.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
 
         callerCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => refreshTask.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken));
+        Assert.Null(GetCurrentTokenSet(manager));
+
         callerCancelled.SetResult();
-        await refreshTask.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
+        var accessToken = await manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask()
+            .WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
         var current = GetCurrentTokenSet(manager);
 
+        Assert.Equal("access-2", accessToken);
         Assert.Equal(1, handler.RequestCount);
         Assert.False(authCancellationObserved.Task.IsCompleted);
         Assert.NotNull(current);
-        Assert.Equal("access-2", current.AccessToken);
         Assert.Equal("current-refresh-2", current.RefreshToken);
+    }
+
+    // A caller waiting for the exchange of another one stops waiting when it is cancelled, too; the exchange goes on.
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenCallerWaitingForAnotherExchangeIsCancelled_StopsWaiting()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 05, 02, 12, 00, 00, TimeSpan.Zero));
+        var requestEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new CapturingHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            requestEntered.TrySetResult();
+            await releaseResponse.Task.WaitAsync(cancellationToken);
+            return JsonResponse(HttpStatusCode.OK, AuthResponseJson("access-2", "current-refresh-2"));
+        });
+        var manager = CreateManager(handler, clock, refreshToken: "settings-refresh-1");
+        var first = manager.GetAccessTokenAsync(TestContext.Current.CancellationToken).AsTask();
+        await requestEntered.Task.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken);
+        using var secondCts = new CancellationTokenSource();
+        var second = manager.GetAccessTokenAsync(secondCts.Token).AsTask();
+
+        secondCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => second.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken));
+        releaseResponse.SetResult();
+
+        Assert.Equal("access-2", await first.WaitAsync(AsyncGuardTimeout, TestContext.Current.CancellationToken));
+        Assert.Equal(1, handler.RequestCount);
     }
 
     [Fact]

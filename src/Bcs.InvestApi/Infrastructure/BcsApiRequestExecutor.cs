@@ -121,19 +121,19 @@ internal sealed class BcsApiRequestExecutor
             _tokens.InvalidateAccessToken(accessToken);
         }
 
-        EnsureSuccess(response.StatusCode, responseBody, endpointName);
+        EnsureSuccess(response, responseBody, endpointName);
         return responseBody;
     }
 
-    private static void EnsureSuccess(HttpStatusCode statusCode, string responseBody, string endpointName)
+    private static void EnsureSuccess(HttpResponseMessage response, string responseBody, string endpointName)
     {
-        var statusCodeValue = (int)statusCode;
+        var statusCodeValue = (int)response.StatusCode;
         if (statusCodeValue is >= 200 and <= 299)
         {
             return;
         }
 
-        throw new BcsApiException(statusCode, responseBody, endpointName, TryParseApiError(responseBody));
+        throw BcsApiException.FromResponse(response, responseBody, endpointName, TryParseApiError(responseBody));
     }
 
     private static BcsApiErrorResponse? TryParseApiError(string responseBody)

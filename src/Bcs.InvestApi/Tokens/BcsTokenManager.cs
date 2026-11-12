@@ -97,16 +97,41 @@ internal sealed class BcsTokenManager : IBcsAccessTokenProvider, IDisposable, IA
         }
 
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Task<BcsTokenSet> exchange;
         try
         {
             current = GetCurrentTokenSetOrNull();
             nowUtc = _timeProvider.GetUtcNow();
             if (current?.HasUsableAccessToken(nowUtc, _settings.TokenRefreshSkew) == true)
             {
+                _refreshGate.Release();
                 return current;
             }
 
-            return await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
+            exchange = ExchangeUnderGateAsync();
+        }
+        catch
+        {
+            _refreshGate.Release();
+            throw;
+        }
+
+        // The caller stops waiting when it is cancelled; the exchange does not stop with it. It holds the gate to its end
+        // (TokenRefreshOperationTimeout at most) and keeps the pair it gets: a rotated refresh token is not lost, and the
+        // next caller takes the pair instead of a second exchange.
+        _ = exchange.ContinueWith(
+            static task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        return await exchange.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<BcsTokenSet> ExchangeUnderGateAsync()
+    {
+        try
+        {
+            return await RefreshCoreAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {

@@ -363,6 +363,45 @@ public sealed class BcsApiExceptionTests
         Assert.Equal(BcsApiErrorTypes.UserNotFound, exception.ApiError?.Type);
     }
 
+    // Retry-After (RFC 9110): seconds; a date — from the answer's Date; a moment past — zero; no header — null.
+    [Theory]
+    [InlineData("3", null, 3.0)]
+    [InlineData("Sat, 02 May 2026 12:00:05 GMT", "Sat, 02 May 2026 12:00:00 GMT", 5.0)]
+    [InlineData("Sat, 02 May 2026 11:59:00 GMT", "Sat, 02 May 2026 12:00:00 GMT", 0.0)]
+    [InlineData(null, null, null)]
+    public async Task GetLimitsAsync_ErrorStatus_ExceptionCarriesRetryAfter(string? retryAfter, string? date, double? expectedSeconds)
+    {
+        var handler = new CapturingHttpMessageHandler((_, _) =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{\"type\":\"RESOURCE_EXHAUSTED\"}");
+            if (retryAfter is not null)
+            {
+                response.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
+            }
+
+            if (date is not null)
+            {
+                response.Headers.TryAddWithoutValidation("Date", date);
+            }
+
+            return Task.FromResult(response);
+        });
+        var service = new BcsLimitsService(
+            CreateSettings(),
+            new HttpClient(handler),
+            new StaticTokenProvider("access-token-1"),
+            CreateReadSender());
+
+        var exception = await Assert.ThrowsAsync<BcsApiException>(() => service.GetLimitsAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(expectedSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null, exception.RetryAfter);
+    }
+
+    [Fact]
+    public void Constructor_NegativeRetryAfter_Throws() =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new BcsApiException(HttpStatusCode.TooManyRequests, string.Empty, retryAfter: TimeSpan.FromSeconds(-1)));
+
     private static IBcsHttpSender CreateReadSender() =>
         new BcsHttpRequestSender();
 

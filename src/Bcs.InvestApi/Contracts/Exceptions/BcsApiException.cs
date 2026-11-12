@@ -18,13 +18,20 @@ public sealed class BcsApiException : Exception
         HttpStatusCode statusCode,
         string responseBody,
         string? endpoint = null,
-        BcsApiErrorResponse? apiError = null)
+        BcsApiErrorResponse? apiError = null,
+        TimeSpan? retryAfter = null)
         : base(BuildMessage(statusCode, endpoint, apiError))
     {
+        if (retryAfter < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(retryAfter), retryAfter, "Retry-After must not be negative.");
+        }
+
         StatusCode = statusCode;
         ResponseBody = responseBody ?? string.Empty;
         Endpoint = endpoint;
         ApiError = apiError;
+        RetryAfter = retryAfter;
     }
 
     public HttpStatusCode StatusCode { get; }
@@ -34,6 +41,34 @@ public sealed class BcsApiException : Exception
     public string? Endpoint { get; }
 
     public BcsApiErrorResponse? ApiError { get; }
+
+    /// <summary>
+    /// How long the server asks to wait before the next request (the <c>Retry-After</c> header of the answer); <c>null</c> —
+    /// the answer has no such header. The SDK does not wait itself.
+    /// </summary>
+    public TimeSpan? RetryAfter { get; }
+
+    /// <summary>The exception of a non-success answer, with the server's wait from its headers.</summary>
+    internal static BcsApiException FromResponse(
+        HttpResponseMessage response,
+        string responseBody,
+        string? endpoint,
+        BcsApiErrorResponse? apiError) =>
+        new(response.StatusCode, responseBody, endpoint, apiError, ReadRetryAfter(response));
+
+    // Retry-After (RFC 9110, 10.2.3): seconds or a date; the date is counted from the answer's Date when it has one.
+    // A moment already past — zero. BCS does not document the header: an answer without it gives null.
+    private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
+    {
+        TimeSpan? wait = response.Headers.RetryAfter switch
+        {
+            { Delta: { } delta } => delta,
+            { Date: { } date } => date - (response.Headers.Date ?? DateTimeOffset.UtcNow),
+            _ => null,
+        };
+
+        return wait < TimeSpan.Zero ? TimeSpan.Zero : wait;
+    }
 
     private static string BuildMessage(HttpStatusCode statusCode, string? endpoint, BcsApiErrorResponse? apiError)
     {
